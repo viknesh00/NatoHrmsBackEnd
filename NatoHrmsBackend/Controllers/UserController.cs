@@ -156,8 +156,33 @@ namespace NatoHrmsBackend.Controllers
 				.FromSqlRaw("EXEC GetEmployeeLeave @p0", targetUser)
 				.ToListAsync();
 
-			return Ok(result);
+			var holidays = await _context.HolidayResponses
+				.FromSqlRaw("EXEC GetHolidaysByUser @p0", targetUser)
+				.ToListAsync();
+
+			return Ok(new
+			{
+				Leaves = result,
+				Holidays = holidays
+			});
 		}
+
+		[HttpPost("ApproveRejectLeave")]
+		public async Task<IActionResult> ApproveOrRejectLeave([FromBody] ApproveLeaveRequest request)
+		{
+			// Get current logged-in user
+			string approver = HttpContext.User.Identity.Name;
+
+			await _context.Database.ExecuteSqlRawAsync(
+				"EXEC ApproveOrRejectLeave @p0, @p1, @p2, @p3",
+					request.LeaveId,
+					request.IsApproved,
+					approver,
+					request.ApproverReason
+				);
+			return Ok(new { Message = "Leave processed successfully." });
+		}
+
 
 
 		[HttpGet("CheckEmail")]

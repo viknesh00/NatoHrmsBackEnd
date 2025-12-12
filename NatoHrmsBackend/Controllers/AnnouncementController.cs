@@ -60,8 +60,9 @@ namespace NatoHrmsBackend.Controllers
 		[HttpGet("GetAnnouncement")]
 		public async Task<IActionResult> GetAllAnnouncements()
 		{
+			string userName = HttpContext.User.Identity.Name;
 			var announcements = await _context.AnnouncementLists
-				.FromSqlRaw("EXEC GetAnnouncements")
+				.FromSqlRaw("EXEC GetAnnouncements @p0", userName)
 				.ToListAsync();
 
 			return Ok(announcements);
