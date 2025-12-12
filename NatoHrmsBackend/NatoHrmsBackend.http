@@ -1,0 +1,6 @@
+@NatoHrmsBackend_HostAddress = http://localhost:5129
+
+GET {{NatoHrmsBackend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
