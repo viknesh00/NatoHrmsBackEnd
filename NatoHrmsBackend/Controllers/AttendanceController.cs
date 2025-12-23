@@ -30,8 +30,8 @@ namespace NatoHrmsBackend.Controllers
 			await _context.Database.ExecuteSqlRawAsync("EXEC FixMissingClockOutForAll");
 
 			await _context.Database.ExecuteSqlRawAsync(
-				"EXEC ClockIn @p0, @p1, @p2",
-				userEmail, req.IpAddress, req.Location
+				"EXEC ClockIn @p0, @p1, @p2, @p3",
+				userEmail, req.IpAddress, req.Location, req.Timestamp
 			);
 			return Ok(new { Message = "Clocked In Successfully" });
 		}
@@ -45,8 +45,8 @@ namespace NatoHrmsBackend.Controllers
 			await _context.Database.ExecuteSqlRawAsync("EXEC FixMissingClockOutForAll");
 
 			await _context.Database.ExecuteSqlRawAsync(
-				"EXEC ClockOut @p0, @p1, @p2",
-				userEmail, req.IpAddress, req.Location
+				"EXEC ClockOut @p0, @p1, @p2, @p3",
+				userEmail, req.IpAddress, req.Location,req.Timestamp
 				);
 
 			return Ok(new { Message = "Clocked Out Successfully" });

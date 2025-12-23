@@ -4,5 +4,6 @@
 	{
 			public string IpAddress { get; set; }
 			public string Location { get; set; }
+			public DateTime Timestamp { get; set; }
 	}
 }

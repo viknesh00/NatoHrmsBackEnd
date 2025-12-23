@@ -38,7 +38,7 @@ builder.Services.AddCors(options =>
 	options.AddPolicy("AllowFrontend", policy =>
 	{
 		policy
-			.WithOrigins("http://localhost:3000") // <-- Your frontend URL
+		    .WithOrigins("https://natoboticshrms.netlify.app","http://localhost:3000", "https://natoboticshrms.vercel.app")
 			.AllowAnyHeader()
 			.AllowAnyMethod()
 			.AllowCredentials();
