@@ -38,7 +38,7 @@ builder.Services.AddCors(options =>
 	options.AddPolicy("AllowFrontend", policy =>
 	{
 		policy
-			.WithOrigins("https://natoboticshrms.netlify.app", "http://localhost:3000", "https://natoboticshrms.vercel.app")
+		    .WithOrigins("https://natoboticshrms.netlify.app","http://localhost:3000", "https://natoboticshrms.vercel.app")
 			.AllowAnyHeader()
 			.AllowAnyMethod()
 			.AllowCredentials();
@@ -48,21 +48,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-
-// Set the path base to natohrms
-app.UsePathBase("/natohrms");
-
-// Swagger configuration with subpath
-app.UseSwagger(c =>
-{
-	c.RouteTemplate = "swagger/{documentName}/swagger.json";
-});
-app.UseSwaggerUI(c =>
-{
-	c.SwaggerEndpoint("/natohrms/swagger/v1/swagger.json", "My API V1");
-	c.RoutePrefix = "swagger"; // This will make it accessible at /natohrms/swagger
-});
-
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
