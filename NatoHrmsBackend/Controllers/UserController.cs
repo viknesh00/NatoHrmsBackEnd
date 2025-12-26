@@ -20,8 +20,9 @@ namespace NatoHrmsBackend.Controllers
 		[HttpGet("All")]
 		public async Task<IActionResult> GetAllUsers()
 		{
+			string userName = HttpContext.User.Identity.Name;
 			var users = await _context.UserLists
-				.FromSqlRaw("EXEC Get_All_Users")
+				.FromSqlRaw("EXEC Get_All_Users @p0", userName)
 				.ToListAsync();
 
 			return Ok(users);

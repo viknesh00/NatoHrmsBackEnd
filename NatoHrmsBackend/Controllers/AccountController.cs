@@ -61,9 +61,10 @@ namespace NatoHrmsBackend.Controllers
 		[HttpGet("GetDepartments")]
 		public async Task<IActionResult> GetDepartments()
 		{
+			string userName = HttpContext.User.Identity.Name;
 			// Call the stored procedure
 			var result = await _context.DropDownItems
-				.FromSqlRaw("EXEC GetDepartments")
+				.FromSqlRaw("EXEC GetDepartments @p0", userName)
 				.ToListAsync(); // no projection needed
 
 
@@ -73,8 +74,9 @@ namespace NatoHrmsBackend.Controllers
 		[HttpGet("GetManagerLists")]
 		public async Task<IActionResult> GetNonEmployeeUsers()
 		{
+			string userName = HttpContext.User.Identity.Name;
 			var result = await _context.DropDownItems
-				.FromSqlRaw("EXEC GetNonEmployeeUsers")
+				.FromSqlRaw("EXEC GetNonEmployeeUsers @p0", userName)
 				.ToListAsync();
 
 			return Ok(result);
