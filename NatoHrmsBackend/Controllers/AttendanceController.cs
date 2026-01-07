@@ -103,11 +103,13 @@ namespace NatoHrmsBackend.Controllers
 		{
 			var result = await _context.DepartmentTimings
 				.FromSqlRaw(
-					"EXEC InsertOrUpdateDepartmentTiming @p0, @p1, @p2, @p3",
+					"EXEC InsertOrUpdateDepartmentTiming @p0, @p1, @p2, @p3, @p4, @p5",
 					timing.DeptId,
 					timing.DepartmentName,
 					timing.StartTime,
-					timing.EndTime
+					timing.EndTime,
+					timing.IncludeSaturday,
+					timing.IncludeSunday
 				)
 				.ToListAsync();
 
