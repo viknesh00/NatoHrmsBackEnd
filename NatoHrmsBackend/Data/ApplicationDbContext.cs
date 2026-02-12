@@ -26,6 +26,8 @@ namespace NatoHrmsBackend.Data
 		public DbSet<EmailCheckResponses>EmailCheckResponses { get; set; }
 		public DbSet<DropDownItem> DropDownItems { get; set; }
 		public DbSet<HolidayResponse> HolidayResponses { get; set; }
+		public DbSet<CompanyDocument> CompanyDocuments { get; set; }
+		public DbSet<CompanyDocumentDownload> CompanyDocumentDownloads { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
@@ -46,6 +48,9 @@ namespace NatoHrmsBackend.Data
 			modelBuilder.Entity<EmailCheckResponses>().HasNoKey();
 			modelBuilder.Entity<DropDownItem>().HasNoKey();
 			modelBuilder.Entity<HolidayResponse>().HasNoKey();
+			modelBuilder.Entity<CompanyDocument>().HasNoKey();
+			modelBuilder.Entity<CompanyDocumentList>().HasNoKey();
+			modelBuilder.Entity<CompanyDocumentDownload>().HasNoKey();
 
 			modelBuilder.Entity<User>()
 				.HasKey(u => u.UserId);
