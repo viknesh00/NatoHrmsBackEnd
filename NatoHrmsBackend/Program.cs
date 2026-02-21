@@ -46,6 +46,7 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHostedService<AttendanceBackgroundService>();
 
 var app = builder.Build();
 app.UseSwagger();
