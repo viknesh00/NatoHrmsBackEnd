@@ -97,9 +97,6 @@ namespace NatoHrmsBackend.Controllers
 
 			var user = login.User;
 
-			// Call stored procedure to fix missing clock-outs
-			await _context.Database.ExecuteSqlRawAsync("EXEC FixMissingClockOutForAll");
-
 			// Get latest attendance where ClockOutAt is null
 			var clockIn = _context.Attendance
 								  .Where(a => a.UserEmail == user.Email

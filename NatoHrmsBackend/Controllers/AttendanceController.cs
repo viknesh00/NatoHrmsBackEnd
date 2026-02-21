@@ -26,9 +26,6 @@ namespace NatoHrmsBackend.Controllers
 		{
 			string userEmail = HttpContext.User.Identity.Name;
 
-			// Fix missing clock-out for all users
-			await _context.Database.ExecuteSqlRawAsync("EXEC FixMissingClockOutForAll");
-
 			await _context.Database.ExecuteSqlRawAsync(
 				"EXEC ClockIn @p0, @p1, @p2, @p3",
 				userEmail, req.IpAddress, req.Location, req.Timestamp
@@ -41,8 +38,6 @@ namespace NatoHrmsBackend.Controllers
 		public async Task<IActionResult> ClockOut([FromBody] ClockInRequest req)
 		{
 			string userEmail = HttpContext.User.Identity.Name;
-
-			await _context.Database.ExecuteSqlRawAsync("EXEC FixMissingClockOutForAll");
 
 			await _context.Database.ExecuteSqlRawAsync(
 				"EXEC ClockOut @p0, @p1, @p2, @p3",
