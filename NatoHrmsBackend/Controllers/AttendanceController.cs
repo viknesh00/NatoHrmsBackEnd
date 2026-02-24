@@ -115,6 +115,25 @@ namespace NatoHrmsBackend.Controllers
 			});
 		}
 
+		[HttpGet("CheckClock-In")]
+		public async Task<IActionResult> CheckClockInStatus()
+		{
+			string userEmail = HttpContext.User.Identity?.Name;
+
+			var clockIn = await _context.Attendance
+				.Where(a => a.UserEmail == userEmail
+							&& a.AttendanceDate == DateTime.Today
+							&& a.ClockOut == null)
+				.OrderByDescending(a => a.ClockIn)
+				.Select(a => a.ClockIn)
+				.FirstOrDefaultAsync();
+
+			return Ok(new
+			{
+				clockIn = clockIn
+			});
+		}
+
 
 	}
 }
