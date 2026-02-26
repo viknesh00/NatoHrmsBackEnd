@@ -17,12 +17,14 @@ namespace NatoHrmsBackend.Controllers
 	public class AuthController : ControllerBase
 	{
 		private readonly ApplicationDbContext _context;
+		private readonly IEmailService _emailService;
 		private readonly IConfiguration _config;
 
-		public AuthController(ApplicationDbContext context, IConfiguration config)
+		public AuthController(ApplicationDbContext context, IConfiguration config, IEmailService emailService)
 		{
 			_context = context;
 			_config = config;
+			_emailService = emailService;
 		}
 
 		[HttpPost("register")]
@@ -142,6 +144,128 @@ namespace NatoHrmsBackend.Controllers
 				employeeId = user.EmployeeId,
 				clockIn = clockIn
 			});
+		}
+
+		[HttpPost("SendOtp")]
+		public async Task<IActionResult> SendOtp([FromBody] EmailRequest request)
+		{
+			if (string.IsNullOrEmpty(request.Email))
+				return BadRequest(new { message = "Email is required" });
+
+			var userLogin = await _context.UserLogins.Include(u => u.User)
+				.FirstOrDefaultAsync(u => u.UserName == request.Email);
+
+			if (userLogin == null)
+				return NotFound(new { message = "User not found" });
+
+			// Generate 6-digit OTP
+			var otp = new Random().Next(100000, 999999).ToString();
+
+			// Save OTP and expiry
+			userLogin.Otp = otp;
+			userLogin.OtpExpiry = DateTime.Now.AddMinutes(10);
+			await _context.SaveChangesAsync();
+
+			try
+			{
+				string subject = "Your OTP for Password Reset";
+				string body = $@"
+<table width='100%' cellpadding='0' cellspacing='0' border='0' style='font-family: Arial, sans-serif; font-size: 14px; color: #333;'>
+  <tr>
+    <td align='center'>
+      <table width='600' cellpadding='20' cellspacing='0' border='0' style='border:1px solid #ddd;'>
+        <tr>
+          <td>
+            <h2 style='color:#2E86C1; margin:0 0 10px 0;'>{subject}</h2>
+            <p style='margin:5px 0;'>Dear {userLogin.User.FirstName} {userLogin.User.LastName},</p>
+            <p style='margin:10px 0;'>Your One-Time Password (OTP) for password reset is:</p>
+            <p style='font-size:24px; font-weight:bold; color:#E74C3C; margin:10px 0;'>{otp}</p>
+            <p style='margin:10px 0;'>This OTP is valid for <strong>10 minutes</strong>. Please do not share it with anyone.</p>
+            <p style='margin:20px 0;'>If you did not request this, please ignore this email.</p>
+            <hr style='border:none; border-top:1px solid #ddd; margin:20px 0;' />
+            <p style='color:gray; font-size:12px; margin:5px 0;'>This is a system-generated email</p>
+            <p style='margin:10px 0;'>Regards,<br/>HRMS Team</p>
+            <table cellpadding='0' cellspacing='0' border='0' style='margin-top:10px;'>
+              <tr>
+                <td>
+                  <img src='https://www.natobotics.com/img/Natobotics.png' alt='Company Logo' width='50' style='display:block;' />
+                </td>
+                <td style='padding-left:10px; font-size:12px; color:#333;'>
+                  e: hr@natobotics.com<br/>
+                  a: Natobotics Technologies Pvt Ltd, Tidel Park, Taramani, Chennai-600113<br/>
+                  w: <a href='https://www.natobotics.com' style='color:#2E86C1; text-decoration:none;'>www.natobotics.com</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>";
+
+
+				// Send the OTP email
+				await _emailService.SendEmail(
+					to: userLogin.User.Email,
+					subject: subject,
+					body: body
+				);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Failed to send OTP email", error = ex.Message });
+			}
+
+			return Ok(new { message = "OTP sent successfully" });
+		}
+
+		[HttpPost("VerifyOtp")]
+		public async Task<IActionResult> VerifyOtp([FromBody] OtpRequest request)
+		{
+			if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Otp))
+				return BadRequest(new { message = "Email and OTP are required" });
+
+			var userLogin = await _context.UserLogins.Include(u => u.User)
+				.FirstOrDefaultAsync(u => u.UserName == request.Email);
+
+			if (userLogin == null)
+				return NotFound(new { message = "User not found" });
+
+			if (userLogin.Otp != request.Otp || userLogin.OtpExpiry < DateTime.Now)
+				return BadRequest(new { message = "Invalid or expired OTP" });
+
+			return Ok(new { message = "OTP verified successfully" });
+		}
+
+		[HttpPost("ResetPassword")]
+		public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+		{
+			if (string.IsNullOrEmpty(request.Email) ||
+				string.IsNullOrEmpty(request.Otp) ||
+				string.IsNullOrEmpty(request.NewPassword))
+				return BadRequest(new { message = "All fields are required" });
+
+			var userLogin = await _context.UserLogins.Include(u => u.User)
+				.FirstOrDefaultAsync(u => u.UserName == request.Email);
+
+			if (userLogin == null)
+				return NotFound(new { message = "User not found" });
+
+			if (userLogin.Otp != request.Otp || userLogin.OtpExpiry < DateTime.Now)
+				return BadRequest(new { message = "Invalid or expired OTP" });
+
+			// Hash new password
+			userLogin.PasswordHash = BC.HashPassword(request.NewPassword);
+			userLogin.IsDefaultPasswordChanged = true;
+
+			// Clear OTP
+			userLogin.Otp = null;
+			userLogin.OtpExpiry = null;
+
+			await _context.SaveChangesAsync();
+
+			return Ok(new { message = "Password reset successfully" });
 		}
 
 

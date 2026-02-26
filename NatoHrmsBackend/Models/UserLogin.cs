@@ -22,6 +22,8 @@ namespace NatoHrmsBackend.Models
 		public bool IsDefaultPasswordChanged { get; set; } = false;
 		public DateTime? LastLoginAt { get; set; }
 		public DateTime CreatedAt { get; set; } = DateTime.Now;
+		public string? Otp { get; set; }
+		public DateTime? OtpExpiry { get; set; }
 
 		public virtual User User { get; set; }
 	}
