@@ -14,7 +14,7 @@
 		public string? ClockInLocation { get; set; }
 		public string? ClockOutLocation { get; set; }
 
-		public decimal? TotalWorkDuration { get; set; }
+		public string? TotalWorkDuration { get; set; }
 
 		public int? BreakCount { get; set; }
 
