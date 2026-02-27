@@ -18,7 +18,7 @@
 
 		public int? BreakCount { get; set; }
 
-		public decimal? BreakDuration { get; set; }
+		public string? BreakDuration { get; set; }
 
 		// Status includes: Present / Absent / Leave / Anomaly / WO
 		public string Status { get; set; }
