@@ -120,9 +120,22 @@ namespace NatoHrmsBackend.Controllers
 		{
 			string userEmail = HttpContext.User.Identity?.Name;
 
+			// 1️⃣ Get current UTC time
+			var utcNow = DateTime.UtcNow;
+
+			// 2️⃣ Convert UTC to IST
+			var istZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+			var istNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, istZone);
+
+			// 3️⃣ Get IST date range (Today 00:00 to Tomorrow 00:00)
+			var todayIST = istNow.Date;
+			var tomorrowIST = todayIST.AddDays(1);
+
+			// 4️⃣ Query attendance using IST range
 			var clockIn = await _context.Attendance
 				.Where(a => a.UserEmail == userEmail
-							&& a.AttendanceDate == DateTime.Today
+							&& a.AttendanceDate >= todayIST
+							&& a.AttendanceDate < tomorrowIST
 							&& a.ClockOut == null)
 				.OrderByDescending(a => a.ClockIn)
 				.Select(a => a.ClockIn)
