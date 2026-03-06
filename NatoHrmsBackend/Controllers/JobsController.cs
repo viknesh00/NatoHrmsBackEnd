@@ -53,9 +53,19 @@ namespace NatoHrmsBackend.Controllers
 		[Authorize]
 		public async Task<IActionResult> CreateJob(JobResponse job)
 		{
+			// Check duplicate JobCode
+			var exists = await _context.Jobs
+				.AnyAsync(j => j.JobCode == job.JobCode && j.IsActive == true);
+
+			if (exists)
+			{
+				return BadRequest("Job Code already exists");
+			}
+
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC sp_InsertJob 
-        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8",
+        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9",
+				job.JobCode,
 				job.JobTitle,
 				job.Role,
 				job.Location,
@@ -74,10 +84,19 @@ namespace NatoHrmsBackend.Controllers
 		[Authorize]
 		public async Task<IActionResult> UpdateJob(JobResponse job)
 		{
+			var exists = await _context.Jobs
+				.AnyAsync(j => j.JobCode == job.JobCode && j.JobId != job.JobId && j.IsActive == true);
+
+			if (exists)
+			{
+				return BadRequest("Job Code already exists");
+			}
+
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC sp_UpdateJob 
-        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9",
+        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10",
 				job.JobId,
+				job.JobCode,
 				job.JobTitle,
 				job.Role,
 				job.Location,
@@ -191,6 +210,21 @@ namespace NatoHrmsBackend.Controllers
 		{
 			if (job.Resume == null || job.Resume.Length == 0)
 				return BadRequest("Resume file is required.");
+
+			// Duplicate application check
+			var sixMonthsAgo = DateTime.Now.AddMonths(-6);
+
+			bool alreadyApplied = await _context.JobApplications
+				.AnyAsync(a =>
+					a.JobId == job.JobId &&
+					a.Email == job.Email &&
+					a.AppliedOn >= sixMonthsAgo);
+
+			if (alreadyApplied)
+			{
+				return BadRequest("You have already applied for this job.");
+			}
+
 
 			// Convert file to byte[]
 			byte[] fileData;

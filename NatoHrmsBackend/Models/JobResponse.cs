@@ -4,6 +4,7 @@
 	public class JobResponse
 	{
 		public int JobId { get; set; }
+		public string JobCode { get; set; }
 		public string Role { get; set; }
 		public string JobTitle { get; set; }
 		public string Location { get; set; }
