@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using NatoHrmsBackend.Data;
 using NatoHrmsBackend.Models;
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace NatoHrmsBackend.Controllers
@@ -189,6 +190,72 @@ namespace NatoHrmsBackend.Controllers
 			);
 		}
 
+		[HttpPost("AddApplication")]
+		[Authorize]
+		public async Task<IActionResult> AddApplication([FromForm] JobApplicationRequest jobApp)
+		{
+			try
+			{
+				// Get authenticated user email and role
+				string assignedTo;
+				string userEmail = HttpContext.User.Identity.Name;
+				string userRole = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value ?? "User";
+
+				bool alreadyApplied = await _context.JobApplications
+				.AnyAsync(a =>
+					a.JobId == jobApp.JobId &&
+					a.Email == jobApp.Email);
+
+				if (alreadyApplied)
+				{
+					// Return 400 with a JSON message
+					return BadRequest(new { message = "This Profile is already applied for this job." });
+				}
+
+				// AssignedTo logic: Admin can pass null/any, others default to userEmail
+				if (userRole == "Admin")
+				{
+					assignedTo = null; // Admin does not require automatic assignment
+				}
+				else
+				{
+					assignedTo = userEmail; // Non-admin → auto-assign to self
+				}
+
+				// Convert uploaded file to byte[]
+				byte[] resumeBytes = null;
+				if (jobApp.Resume != null && jobApp.Resume.Length > 0)
+				{
+					using var ms = new MemoryStream();
+					await jobApp.Resume.CopyToAsync(ms);
+					resumeBytes = ms.ToArray();
+				}
+
+				// Call SP with parameter order like @p0, @p1 ...
+				await _context.Database.ExecuteSqlRawAsync(
+					@"EXEC AddJobApplication 
+@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10",
+					jobApp.JobId,
+					jobApp.FirstName,
+					jobApp.LastName,
+					jobApp.Email,
+					jobApp.Phone,
+					jobApp.Skills,
+					resumeBytes,
+					jobApp.ResumeFileName,
+					jobApp.ResumeFileType,
+					jobApp.CandidateStatus,
+					assignedTo
+				);
+
+				return Ok(new { message = "Application saved successfully" });
+			}
+			catch (Exception ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+		}
+
 		[HttpPost("UpdateApplicationStaus")]
 		[Authorize]
 		public async Task<IActionResult> UpdateIsActive([FromBody] UpdateApplicationStatus request)
@@ -204,6 +271,7 @@ namespace NatoHrmsBackend.Controllers
 			return Ok(new { Message = "Status updated successfully." });
 		}
 
+
 		[AllowAnonymous]
 		[HttpPost("SubmitApplication")]
 		public async Task<IActionResult> SubmitApplication([FromForm] JobApplicationResponse job)
@@ -212,13 +280,11 @@ namespace NatoHrmsBackend.Controllers
 				return BadRequest("Resume file is required.");
 
 			// Duplicate application check
-			var sixMonthsAgo = DateTime.Now.AddMonths(-6);
 
 			bool alreadyApplied = await _context.JobApplications
 				.AnyAsync(a =>
 					a.JobId == job.JobId &&
-					a.Email == job.Email &&
-					a.AppliedOn >= sixMonthsAgo);
+					a.Email == job.Email );
 
 			if (alreadyApplied)
 			{
