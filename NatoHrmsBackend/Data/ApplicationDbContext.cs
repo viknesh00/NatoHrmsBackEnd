@@ -28,6 +28,9 @@ namespace NatoHrmsBackend.Data
 		public DbSet<HolidayResponse> HolidayResponses { get; set; }
 		public DbSet<CompanyDocument> CompanyDocuments { get; set; }
 		public DbSet<CompanyDocumentDownload> CompanyDocumentDownloads { get; set; }
+		public DbSet<JobResponse> JobResponses { get; set; }
+		public DbSet<Job> Jobs { get; set; }
+		public DbSet<JobApplication> JobApplications { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
@@ -51,6 +54,9 @@ namespace NatoHrmsBackend.Data
 			modelBuilder.Entity<CompanyDocument>().HasNoKey();
 			modelBuilder.Entity<CompanyDocumentList>().HasNoKey();
 			modelBuilder.Entity<CompanyDocumentDownload>().HasNoKey();
+			modelBuilder.Entity<Job>().HasNoKey();
+			modelBuilder.Entity<JobApplication>().HasNoKey();
+
 
 			modelBuilder.Entity<User>()
 				.HasKey(u => u.UserId);
@@ -60,6 +66,8 @@ namespace NatoHrmsBackend.Data
 				.WithMany()
 				.HasForeignKey(ul => ul.UserId)
 				.OnDelete(DeleteBehavior.Cascade);
+
+			modelBuilder.Entity<JobResponse>().HasKey(j => j.JobId);
 		}
 	}
 }
