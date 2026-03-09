@@ -54,6 +54,7 @@ namespace NatoHrmsBackend.Controllers
 		[Authorize]
 		public async Task<IActionResult> CreateJob(JobResponse job)
 		{
+			string userName = HttpContext.User.Identity.Name;
 			// Check duplicate JobCode
 			var exists = await _context.Jobs
 				.AnyAsync(j => j.JobCode == job.JobCode && j.IsActive == true);
@@ -65,7 +66,7 @@ namespace NatoHrmsBackend.Controllers
 
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC sp_InsertJob 
-        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9",
+        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11",
 				job.JobCode,
 				job.JobTitle,
 				job.Role,
@@ -75,7 +76,9 @@ namespace NatoHrmsBackend.Controllers
 				job.Skills,
 				job.Description,
 				job.Responsibilities,
-				job.Qualifications
+				job.Qualifications,
+				job.PostedDate,
+				userName // Pass the authenticated user's name to the stored procedure
 			);
 
 			return Ok("Job Created Successfully");
@@ -85,6 +88,7 @@ namespace NatoHrmsBackend.Controllers
 		[Authorize]
 		public async Task<IActionResult> UpdateJob(JobResponse job)
 		{
+			string userName = HttpContext.User.Identity.Name;
 			var exists = await _context.Jobs
 				.AnyAsync(j => j.JobCode == job.JobCode && j.JobId != job.JobId && j.IsActive == true);
 
@@ -95,7 +99,7 @@ namespace NatoHrmsBackend.Controllers
 
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC sp_UpdateJob 
-        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10",
+        @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12",
 				job.JobId,
 				job.JobCode,
 				job.JobTitle,
@@ -106,7 +110,9 @@ namespace NatoHrmsBackend.Controllers
 				job.Skills,
 				job.Description,
 				job.Responsibilities,
-				job.Qualifications
+				job.Qualifications,
+				job.PostedDate,
+				userName
 			);
 
 			return Ok("Job Updated Successfully");
