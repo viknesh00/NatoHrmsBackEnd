@@ -133,10 +133,7 @@ namespace NatoHrmsBackend.Controllers
 
 			// 4️⃣ Query attendance using IST range
 			var clockIn = await _context.Attendance
-				.Where(a => a.UserEmail == userEmail
-							&& a.AttendanceDate >= todayIST
-							&& a.AttendanceDate < tomorrowIST
-							&& a.ClockOut == null)
+				.Where(a => a.UserEmail == userEmail && a.ClockOut == null)
 				.OrderByDescending(a => a.ClockIn)
 				.Select(a => a.ClockIn)
 				.FirstOrDefaultAsync();
