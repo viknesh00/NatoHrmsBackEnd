@@ -380,13 +380,14 @@ namespace NatoHrmsBackend.Controllers
 					to: toEmail,
 					subject: subject,
 					body: body,
-					 attachments: new[] {
+					attachments: new[] {
 						new EmailAttachment {
 						FileName = job.Resume.FileName,
 						ContentType = job.Resume.ContentType,
 						Content = fileData
 						}
-					}
+					},
+					includeCcFromConfig: true
 				);
 
 				// Auto reply email to applicant
