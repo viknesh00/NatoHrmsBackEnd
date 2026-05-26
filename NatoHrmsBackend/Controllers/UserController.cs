@@ -55,7 +55,7 @@ namespace NatoHrmsBackend.Controllers
 				@"EXEC AddUser 
                 @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12,@p13,@p14,@p15,@p16,@p17,@p18,@p19,@p20,
                 @p21,@p22,@p23,@p24,@p25,@p26,@p27,@p28,@p29,@p30,@p31,@p32,@p33,@p34,@p35,@p36,@p37,@p38,@p39,@p40,
-                @p41,@p42,@p43,@p44,@p45,@p46,@p47,@p48,@p49,@p50",
+                @p41,@p42,@p43,@p44,@p45,@p46,@p47,@p48,@p49,@p50,@P51",
 				user.FirstName, user.LastName, user.Gender, user.DOB, user.MaritalStatus,
 				user.Nationality, user.BloodGroup, user.ContactNumber, user.Email, user.Address,
 				user.EmployeeType, user.Department, user.Designation, user.DOJ, user.WorkLocation,
@@ -67,7 +67,7 @@ namespace NatoHrmsBackend.Controllers
 				user.PreviousCompany, user.TotalExperience, user.EmergencyContactName,
 				user.EmergencyContactNumber, user.Relationship, user.WorkShift,
 				user.WorkMode, user.Notes, user.ProfilePhoto, user.Resume, user.AadharCard, user.PanCard,
-				user.OfferLetter, passwordHash
+				user.OfferLetter, passwordHash, user.projectAssigned
 			);
 
 			// Send welcome email with credentials (non-blocking)
@@ -86,7 +86,7 @@ namespace NatoHrmsBackend.Controllers
 		public async Task<IActionResult> EditUser([FromBody] User user)
 		{
 			await _context.Database
-				.ExecuteSqlRawAsync("EXEC UpdateUser @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12,@p13,@p14,@p15,@p16,@p17,@p18,@p19,@p20,@p21,@p22,@p23,@p24,@p25,@p26,@p27,@p28,@p29,@p30,@p31,@p32,@p33,@p34,@p35,@p36,@p37,@p38,@p39,@p40,@p41,@p42,@p43,@p44,@p45,@p46,@p47,@p48,@p49",
+				.ExecuteSqlRawAsync("EXEC UpdateUser @p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12,@p13,@p14,@p15,@p16,@p17,@p18,@p19,@p20,@p21,@p22,@p23,@p24,@p25,@p26,@p27,@p28,@p29,@p30,@p31,@p32,@p33,@p34,@p35,@p36,@p37,@p38,@p39,@p40,@p41,@p42,@p43,@p44,@p45,@p46,@p47,@p48,@p49,@p50",
 					user.Email, user.FirstName, user.LastName, user.Gender, user.DOB,
 					user.MaritalStatus, user.Nationality, user.BloodGroup, user.ContactNumber,
 					user.Address, user.EmployeeType, user.Department, user.Designation,
@@ -99,7 +99,7 @@ namespace NatoHrmsBackend.Controllers
 					user.University, user.YearOfPassing, user.PreviousCompany,
 					user.TotalExperience, user.EmergencyContactName, user.EmergencyContactNumber,
 					user.Relationship, user.WorkShift, user.WorkMode, user.Notes, user.ProfilePhoto,
-					user.Resume, user.AadharCard, user.PanCard, user.OfferLetter
+					user.Resume, user.AadharCard, user.PanCard, user.OfferLetter, user.projectAssigned
 				);
 			return Ok(new { Message = "User Updated Successfully" });
 		}

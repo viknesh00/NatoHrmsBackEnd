@@ -31,6 +31,9 @@ namespace NatoHrmsBackend.Data
 		public DbSet<JobResponse> JobResponses { get; set; }
 		public DbSet<Job> Jobs { get; set; }
 		public DbSet<JobApplication> JobApplications { get; set; }
+		public DbSet<ProjectResponse> ProjectResponses { get; set; }
+		public DbSet<AssignedEmployeeResponse> AssignedEmployeeResponses { get; set; }
+		public DbSet<AssignProjectResponse> AssignProjectResponses { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
@@ -56,6 +59,10 @@ namespace NatoHrmsBackend.Data
 			modelBuilder.Entity<CompanyDocumentDownload>().HasNoKey();
 			modelBuilder.Entity<Job>().HasNoKey();
 			modelBuilder.Entity<JobApplication>().HasNoKey();
+			modelBuilder.Entity<ProjectResponse>().HasNoKey();
+			modelBuilder.Entity<AssignedEmployeeResponse>().HasNoKey();
+			modelBuilder.Entity<AssignProjectResponse>().HasNoKey();
+
 
 
 			modelBuilder.Entity<User>()
