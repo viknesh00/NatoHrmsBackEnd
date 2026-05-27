@@ -12,5 +12,6 @@
 		public string? Status { get; set; }  // string → string?
 		public DateTime? CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
+		public string? Department { get; set; }
 	}
 }

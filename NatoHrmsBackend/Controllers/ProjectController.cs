@@ -25,18 +25,6 @@ namespace NatoHrmsBackend.Controllers
 			var result = await _context.ProjectResponses
 				.FromSqlRaw("EXEC GetAllProjects")
 				.ToListAsync();
-
-			return Ok(result);
-		}
-
-		// GET api/Project/AssignedEmployees
-		[HttpGet("AssignedEmployees")]
-		public async Task<IActionResult> GetAssignedEmployees()
-		{
-			var result = await _context.AssignedEmployeeResponses
-				.FromSqlRaw("EXEC GetAssignedEmployees")
-				.ToListAsync();
-
 			return Ok(result);
 		}
 
@@ -49,7 +37,7 @@ namespace NatoHrmsBackend.Controllers
 
 			var result = await _context.ProjectResponses
 				.FromSqlRaw(
-					"EXEC InsertOrUpdateProject @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7",
+					"EXEC InsertOrUpdateProject @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8",
 					req.ProjectId ?? (object)DBNull.Value,
 					req.ProjectName,
 					req.Description ?? (object)DBNull.Value,
@@ -57,7 +45,8 @@ namespace NatoHrmsBackend.Controllers
 					req.ManagerEmail ?? (object)DBNull.Value,
 					req.StartDate ?? (object)DBNull.Value,
 					req.EndDate ?? (object)DBNull.Value,
-					req.Status
+					req.Status,
+					req.Department ?? (object)DBNull.Value
 				)
 				.ToListAsync();
 
@@ -72,35 +61,6 @@ namespace NatoHrmsBackend.Controllers
 			{
 				message = isNew ? "Project created successfully." : "Project updated successfully.",
 				data
-			});
-		}
-
-		// POST api/Project/AssignEmployee
-		[HttpPost("AssignEmployee")]
-		public async Task<IActionResult> AssignProjectToEmployee([FromBody] AssignProjectRequest req)
-		{
-			if (string.IsNullOrWhiteSpace(req.Email))
-				return BadRequest(new { message = "Employee email is required." });
-
-			if (string.IsNullOrWhiteSpace(req.ProjectName))
-				return BadRequest(new { message = "Project name is required." });
-
-			if (string.IsNullOrWhiteSpace(req.AssignedDate))
-				req.AssignedDate = DateTime.Now.ToString("yyyy-MM-dd");
-
-			var result = await _context.AssignProjectResponses
-				.FromSqlRaw(
-					"EXEC AssignProjectToEmployee @p0, @p1, @p2",
-					req.Email,
-					req.ProjectName,
-					req.AssignedDate
-				)
-				.ToListAsync();
-
-			return Ok(new
-			{
-				message = "Employee assigned to project successfully.",
-				data = result.FirstOrDefault()
 			});
 		}
 	}
