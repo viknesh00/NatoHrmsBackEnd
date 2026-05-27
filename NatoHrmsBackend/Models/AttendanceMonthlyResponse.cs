@@ -22,5 +22,7 @@
 
 		// Status includes: Present / Absent / Leave / Anomaly / WO
 		public string Status { get; set; }
+		public string? Department { get; set; }
+		public string? ProjectAssigned { get; set; }
 	}
 }

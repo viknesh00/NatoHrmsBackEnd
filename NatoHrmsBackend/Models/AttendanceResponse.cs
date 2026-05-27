@@ -8,5 +8,7 @@
 		public string IpAddress { get; set; }
 		public string Location { get; set; }
 		public string UserName { get; set; }
+		public string? Department { get; set; }
+		public string? ProjectAssigned { get; set; }
 	}
 }
