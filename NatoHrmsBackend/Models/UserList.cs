@@ -59,5 +59,7 @@
 		// 🔥 Added from UserLogins table
 		public bool? IsActive { get; set; }
 		public DateTime? LastLoginAt { get; set; }
+
+		public string? projectAssigned { get; set; }
 	}
 }
