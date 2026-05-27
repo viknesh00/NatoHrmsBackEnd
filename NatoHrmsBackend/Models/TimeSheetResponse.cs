@@ -13,5 +13,7 @@
 		public string? LeaveType { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
+		public string? Department { get; set; }
+		public string? ProjectAssigned { get; set; }
 	}
 }
