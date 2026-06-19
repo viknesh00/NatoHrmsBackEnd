@@ -4,6 +4,7 @@ using System.Text;
 using NatoHrmsBackend.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
+using NatoHrmsBackend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
+builder.Services.AddHostedService<MonthlyTimesheetReportService>();
 
 var app = builder.Build();
 app.UseSwagger();

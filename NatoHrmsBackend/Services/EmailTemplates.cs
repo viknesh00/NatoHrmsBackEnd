@@ -65,7 +65,7 @@ namespace NatoHrmsBackend.Services
               <td style=""padding:8px 0;border-bottom:1px solid #f1f5f9;"">
                 <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"">
                   <tr>
-                    <td style=""font-family:'DM Sans',Arial,sans-serif;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;width:140px;"">{label}</td>
+                    <td style=""font-family:'DM Sans',Arial,sans-serif;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;width:160px;padding-right:16px;"">{label}</td>
                     <td style=""font-family:'DM Sans',Arial,sans-serif;font-size:13px;font-weight:600;color:#1e293b;"">{value}</td>
                   </tr>
                 </table>
@@ -102,8 +102,6 @@ namespace NatoHrmsBackend.Services
 			$@"<h1 style=""margin:0 0 8px;font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:800;color:#1e1143;line-height:1.25;"">{text}</h1>";
 
 		// ─── OTP DIGIT SPACER ────────────────────────────────────────────────────
-		// Adds margin-right between digits only — no trailing space on the last digit,
-		// so the OTP block is truly centered without letter-spacing bleed.
 		static string SpacedOtp(string otp) =>
 			string.Concat(otp.Select((c, i) =>
 				i < otp.Length - 1
@@ -279,6 +277,39 @@ namespace NatoHrmsBackend.Services
                   🔒 If you did not make this change, contact your administrator or HR immediately to secure your account.
                 </div>
                 <p style=""margin:0;font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:#475569;"">Regards,<br/><strong style=""color:#1e1143;"">Natobotics HRMS Security Team</strong></p>
+              ")}
+            </table>
+            ");
+
+		// ─── MONTHLY TIMESHEET REPORT ────────────────────────────────────────────
+		// AFTER
+		public static string MonthlyTimesheetReportEmail(string department, string monthLabel, int totalEmployees, double totalRegularHours, double totalOvertimeHours, int totalLeaveDays, string generatedAt) =>
+			Base($@"
+            <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"">
+              {TopBar("#0d9488")}
+              {BodyPad($@"
+                {Eyebrow("Monthly Report 📊", "#0d9488")}
+                {H1($"{department} Timesheet — {monthLabel}")}
+                <p style=""margin:0 0 20px;font-family:'DM Sans',Arial,sans-serif;font-size:14px;color:#475569;line-height:1.7;"">
+                  Hi,<br/>
+                  The monthly timesheet report for <strong style=""color:#1e1143;"">{department}</strong> covering
+                  <strong style=""color:#1e1143;"">{monthLabel}</strong> has been generated automatically on the last working day of the month.
+                  Please find the full breakdown attached as an Excel workbook.
+                </p>
+
+                {InfoTable($@"
+                  {InfoRow("Department", department)}
+                  {InfoRow("Period", monthLabel)}
+                  {InfoRow("Employees Covered", totalEmployees.ToString())}
+                  {InfoRow("Total Regular Hours", totalRegularHours.ToString("0.00"))}
+                  {InfoRow("Total Overtime Hours", totalOvertimeHours.ToString("0.00"))}
+                  {InfoRow("Generated On", $"<span style='font-family:monospace;font-size:12px;color:#475569;'>{generatedAt}</span>")}
+                ")}
+
+                <div style=""border-left:4px solid #f59e0b;background:#fffbeb;padding:12px 16px;border-radius:0 8px 8px 0;font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:#78350f;margin-bottom:20px;"">
+                  📎 The attached workbook contains two sheets — <strong>Leave Summary</strong> and <strong>Timesheet</strong> — with the full per-employee, per-day breakdown.
+                </div>
+                <p style=""margin:0;font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:#475569;"">Regards,<br/><strong style=""color:#1e1143;"">Natobotics HRMS System</strong></p>
               ")}
             </table>
             ");
