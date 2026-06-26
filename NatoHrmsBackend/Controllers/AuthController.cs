@@ -79,13 +79,10 @@ namespace NatoHrmsBackend.Controllers
 			var login = _context.UserLogins
 				.Include(l => l.User)
 				.FirstOrDefault(u => u.UserName == request.UserName);
-
 			if (login == null)
 				return Conflict(new { Message = "Invalid email or password." });
-
 			if (!BC.Verify(request.Password, login.PasswordHash))
 				return Conflict(new { Message = "Invalid email or password." });
-
 			if (!login.IsActive)
 				return Conflict(new { Message = "Your account is inactive. Please contact administrator." });
 
@@ -100,13 +97,20 @@ namespace NatoHrmsBackend.Controllers
 				.Select(a => a.ClockIn)
 				.FirstOrDefault();
 
+			// Fetch department timing config for this user's department
+			var deptTiming = _context.DepartmentTimings
+				.FirstOrDefault(d => d.DepartmentName == user.Department);
+
+			bool includeSaturday = deptTiming?.IncludeSaturday ?? false;
+			bool includeSunday = deptTiming?.IncludeSunday ?? false;
+
 			var authClaims = new[]
 			{
-				new Claim(ClaimTypes.Name, user.Email),
-				new Claim(ClaimTypes.Role, user?.AccessRole ?? "User"),
-				new Claim("UserId", login.UserId.ToString()),
-				new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-			};
+		new Claim(ClaimTypes.Name, user.Email),
+		new Claim(ClaimTypes.Role, user?.AccessRole ?? "User"),
+		new Claim("UserId", login.UserId.ToString()),
+		new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+	};
 
 			var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
 			var token = new JwtSecurityToken(
@@ -127,7 +131,12 @@ namespace NatoHrmsBackend.Controllers
 				firstName = user.FirstName,
 				lastName = user.LastName,
 				employeeId = user.EmployeeId,
-				clockIn = clockIn
+				clockIn = clockIn,
+				department = user.Department,
+				includeSaturday = includeSaturday,
+				includeSunday = includeSunday,
+				shiftStartTime = deptTiming?.StartTime,
+				shiftEndTime = deptTiming?.EndTime
 			});
 		}
 
