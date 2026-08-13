@@ -56,6 +56,17 @@ namespace NatoHrmsBackend.Controllers
 			return Ok(data);
 		}
 
+		[HttpGet("GetMyTimeSheet")]
+		public async Task<IActionResult> GetMyTimeSheet(string month)
+		{
+			string username = HttpContext.User.Identity.Name;
+
+			var data = await _context.TimeSheetResponses
+				.FromSqlRaw("EXEC GetMyTimeSheetEntries @p0, @p1", username, month)
+				.ToListAsync();
+
+			return Ok(data);
+		}
 
 	}
 }

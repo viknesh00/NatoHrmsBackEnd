@@ -81,5 +81,6 @@ namespace NatoHrmsBackend.Models
 		public DateTime? UpdatedAt { get; set; }
 
 		public string? projectAssigned { get; set; }
+		public bool RestrictToWorkLocation { get; set; } = false;
 	}
 }

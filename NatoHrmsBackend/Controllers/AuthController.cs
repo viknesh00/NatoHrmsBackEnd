@@ -136,7 +136,9 @@ namespace NatoHrmsBackend.Controllers
 				includeSaturday = includeSaturday,
 				includeSunday = includeSunday,
 				shiftStartTime = deptTiming?.StartTime,
-				shiftEndTime = deptTiming?.EndTime
+				shiftEndTime = deptTiming?.EndTime,
+				workLocationCity = user.WorkLocation,
+				geoFenceEnabled = user.RestrictToWorkLocation
 			});
 		}
 
