@@ -313,5 +313,50 @@ namespace NatoHrmsBackend.Services
               ")}
             </table>
             ");
+
+		// ─── EMPLOYEE DETAILS FORM SUBMITTED (TO HR) ─────────────────────────────
+		// All values come from a public form, so they are HTML-encoded before being placed in the mail.
+		public static string EmployeeDetailsSubmittedEmail(
+			int submissionId, string firstName, string lastName, string dateOfBirth, string placeOfBirth,
+			string mobileNumber, string passportNo, string salCode, string city, string country,
+			string currentAddress, string nConsEmail, string nConsEmailStatus, string personalEmail, string submittedAt)
+		{
+			static string E(string v) => System.Net.WebUtility.HtmlEncode(v ?? "");
+
+			return Base($@"
+            <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"">
+              {TopBar()}
+              {BodyPad($@"
+                {Eyebrow("New Submission", "#6c3fc5")}
+                {H1("Employee Details Received")}
+                <p style=""margin:0 0 20px;font-family:'DM Sans',Arial,sans-serif;font-size:14px;color:#475569;line-height:1.7;"">
+                  <strong style=""color:#1e1143;"">{E(firstName)} {E(lastName)}</strong> has submitted the employee details form.
+                </p>
+
+                {InfoTable($@"
+                  {InfoRow("First Name", E(firstName))}
+                  {InfoRow("Last Name", E(lastName))}
+                  {InfoRow("Date of Birth", E(dateOfBirth))}
+                  {InfoRow("Place of Birth", E(placeOfBirth))}
+                  {InfoRow("Mobile", E(mobileNumber))}
+                  {InfoRow("Passport No.", E(passportNo))}
+                  {InfoRow("SAL Code", E(salCode))}
+                  {InfoRow("City", E(city))}
+                  {InfoRow("Country", E(country))}
+                  {InfoRow("Current Address", E(currentAddress))}
+                  {InfoRow("N-Cons Email ID", E(nConsEmail))}
+                  {InfoRow("N-Cons Email Status", E(nConsEmailStatus))}
+                  {InfoRow("Personal Email ID", E(personalEmail))}
+                  {InfoRow("Submitted At", E(submittedAt))}
+                ")}
+
+                <div style=""border-left:4px solid #f59e0b;background:#fffbeb;padding:12px 16px;border-radius:0 8px 8px 0;font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:#78350f;margin-bottom:20px;"">
+                  The passport copy and passport-size photo are attached to this email and stored with the submission.
+                </div>
+                <p style=""margin:0;font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:#475569;"">Regards,<br/><strong style=""color:#1e1143;"">Natobotics HRMS System</strong></p>
+              ")}
+            </table>
+            ");
+		}
 	}
 }
