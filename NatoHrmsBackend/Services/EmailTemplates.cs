@@ -319,7 +319,8 @@ namespace NatoHrmsBackend.Services
 		public static string EmployeeDetailsSubmittedEmail(
 			int submissionId, string firstName, string lastName, string dateOfBirth, string placeOfBirth,
 			string mobileNumber, string passportNo, string salCode, string city, string country,
-			string currentAddress, string nConsEmail, string nConsEmailStatus, string personalEmail, string submittedAt)
+			string currentAddress, string nConsEmail, string nConsEmailStatus, string personalEmail,
+			string visaType, string workVisaExpiry, string hasSiemensIdCard, string whatsAppNumber, string submittedAt)
 		{
 			static string E(string v) => System.Net.WebUtility.HtmlEncode(v ?? "");
 
@@ -347,6 +348,10 @@ namespace NatoHrmsBackend.Services
                   {InfoRow("N-Cons Email ID", E(nConsEmail))}
                   {InfoRow("N-Cons Email Status", E(nConsEmailStatus))}
                   {InfoRow("Personal Email ID", E(personalEmail))}
+                  {InfoRow("Visa / Work Permit Type", E(visaType))}
+                  {InfoRow("Work Visa Expiry Date", E(workVisaExpiry))}
+                  {InfoRow("Siemens ID Card", E(hasSiemensIdCard))}
+                  {InfoRow("WhatsApp Number", E(whatsAppNumber))}
                   {InfoRow("Submitted At", E(submittedAt))}
                 ")}
 

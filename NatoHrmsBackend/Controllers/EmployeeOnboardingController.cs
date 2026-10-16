@@ -117,6 +117,10 @@ namespace NatoHrmsBackend.Controllers
 				new SqlParameter("@NConsEmail", EmployeeDetailsController.DbOrNull(model.NConsEmail)),
 				new SqlParameter("@NConsEmailStatus", EmployeeDetailsController.DbOrNull(model.NConsEmailStatus)),
 				new SqlParameter("@PersonalEmail", model.PersonalEmail.Trim()),
+				new SqlParameter("@VisaType", EmployeeDetailsController.DbOrNull(model.VisaType)),
+				new SqlParameter("@WorkVisaExpiryDate", SqlDbType.Date) { Value = (object?)EmployeeDetailsController.ParseDmy(model.WorkVisaExpiryDate) ?? DBNull.Value },
+				new SqlParameter("@HasSiemensIdCard", EmployeeDetailsController.DbOrNull(model.HasSiemensIdCard)),
+				new SqlParameter("@WhatsAppNumber", EmployeeDetailsController.DbOrNull(model.WhatsAppNumber)),
 				new SqlParameter("@UpdatedBy", HttpContext.User.Identity.Name),
 				new SqlParameter("@PassportCopyFileName", (object?)passportCopy?.FileName ?? DBNull.Value),
 				new SqlParameter("@PassportCopyContentType", (object?)passportCopy?.ContentType ?? DBNull.Value),
@@ -129,7 +133,7 @@ namespace NatoHrmsBackend.Controllers
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC UpdateEmployeeDetails
 				@SubmissionId, @FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
-				@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @UpdatedBy,
+				@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @WhatsAppNumber, @UpdatedBy,
 				@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
 				@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData",
 				parameters
@@ -235,7 +239,8 @@ namespace NatoHrmsBackend.Controllers
 			{
 				"First Name", "Last Name", "Date of Birth", "Place of Birth", "Mobile Number", "Passport No.",
 				"SAL Code", "City", "Country", "Current Address", "N-Cons Email ID", "N-Cons Email Status",
-				"Personal Email ID", "Passport Copy", "Passport Photo", "Submitted At"
+				"Personal Email ID", "Visa / Work Permit Type", "Work Visa Expiry Date", "Siemens ID Card", "WhatsApp Number",
+				"Passport Copy", "Passport Photo", "Submitted At"
 			};
 			for (int c = 0; c < headers.Length; c++)
 			{
@@ -261,9 +266,13 @@ namespace NatoHrmsBackend.Controllers
 				ws.Cell(r, 11).Value = x.NConsEmail ?? "";
 				ws.Cell(r, 12).Value = x.NConsEmailStatus ?? "";
 				ws.Cell(r, 13).Value = x.PersonalEmail;
-				ws.Cell(r, 14).Value = x.PassportCopyFileName ?? "";
-				ws.Cell(r, 15).Value = x.PassportPhotoFileName ?? "";
-				ws.Cell(r, 16).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
+				ws.Cell(r, 14).Value = x.VisaType ?? "";
+				ws.Cell(r, 15).Value = x.WorkVisaExpiryDate?.ToString("dd/MM/yyyy") ?? "";
+				ws.Cell(r, 16).Value = x.HasSiemensIdCard ?? "";
+				ws.Cell(r, 17).SetValue(x.WhatsAppNumber ?? "");
+				ws.Cell(r, 18).Value = x.PassportCopyFileName ?? "";
+				ws.Cell(r, 19).Value = x.PassportPhotoFileName ?? "";
+				ws.Cell(r, 20).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
 				r++;
 			}
 

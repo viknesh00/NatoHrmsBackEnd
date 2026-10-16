@@ -81,6 +81,10 @@ namespace NatoHrmsBackend.Controllers
 					new SqlParameter("@NConsEmail", EmployeeDetailsController.DbOrNull(model.NConsEmail)),
 					new SqlParameter("@NConsEmailStatus", EmployeeDetailsController.DbOrNull(model.NConsEmailStatus)),
 					new SqlParameter("@PersonalEmail", model.PersonalEmail.Trim()),
+					new SqlParameter("@VisaType", EmployeeDetailsController.DbOrNull(model.VisaType)),
+					new SqlParameter("@WorkVisaExpiryDate", SqlDbType.Date) { Value = (object?)EmployeeDetailsController.ParseDmy(model.WorkVisaExpiryDate) ?? DBNull.Value },
+					new SqlParameter("@HasSiemensIdCard", EmployeeDetailsController.DbOrNull(model.HasSiemensIdCard)),
+					new SqlParameter("@WhatsAppNumber", EmployeeDetailsController.DbOrNull(model.WhatsAppNumber)),
 					new SqlParameter("@SubmittedFromIp", (object?)HttpContext.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value),
 					new SqlParameter("@PassportCopyFileName", passportCopy.FileName),
 					new SqlParameter("@PassportCopyContentType", passportCopy.ContentType),
@@ -94,7 +98,7 @@ namespace NatoHrmsBackend.Controllers
 				await _context.Database.ExecuteSqlRawAsync(
 					@"EXEC InsertEmployeeDetails
 					@FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
-					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @SubmittedFromIp,
+					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @WhatsAppNumber, @SubmittedFromIp,
 					@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
 					@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData,
 					@SubmissionId OUTPUT",
@@ -114,6 +118,8 @@ namespace NatoHrmsBackend.Controllers
 							model.MobileNumber.Trim(), passportNo, OrDash(model.SALCode), model.City.Trim(),
 							model.Country.Trim(), model.CurrentAddress.Trim(), OrDash(model.NConsEmail),
 							OrDash(model.NConsEmailStatus), model.PersonalEmail.Trim(),
+							OrDash(model.VisaType), ParseDmy(model.WorkVisaExpiryDate)?.ToString("dd/MM/yyyy") ?? "-",
+							OrDash(model.HasSiemensIdCard), OrDash(model.WhatsAppNumber),
 							DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
 
 						await _emailService.SendEmail(
@@ -218,7 +224,36 @@ namespace NatoHrmsBackend.Controllers
 			if (!e.ContainsKey("personalEmail") && !EmailRegex.IsMatch(m.PersonalEmail.Trim()))
 				e["personalEmail"] = "Please enter a valid Personal Email ID.";
 
+			// Work authorisation / contact - all optional
+			if (!string.IsNullOrWhiteSpace(m.VisaType)
+				&& (m.VisaType.Trim().Length > 100 || HasControlChars(m.VisaType.Trim())))
+				e["visaType"] = "Visa / Work Permit Type is invalid or longer than 100 characters.";
+
+			if (!string.IsNullOrWhiteSpace(m.WorkVisaExpiryDate) && ParseDmy(m.WorkVisaExpiryDate) == null)
+				e["workVisaExpiryDate"] = "Work Visa Expiry Date must be a valid date in DD/MM/YYYY format.";
+
+			var siemens = m.HasSiemensIdCard?.Trim();
+			if (!string.IsNullOrEmpty(siemens) && siemens != "Yes" && siemens != "No")
+				e["hasSiemensIdCard"] = "Siemens ID Card must be Yes or No.";
+
+			if (!string.IsNullOrWhiteSpace(m.WhatsAppNumber))
+			{
+				var raw = m.WhatsAppNumber.Trim();
+				var digits = new string(raw.Where(char.IsDigit).ToArray());
+				if (!raw.StartsWith("+") || !Regex.IsMatch(raw, @"^\+[0-9][0-9 \-]*$") || digits.Length < 8 || digits.Length > 15)
+					e["whatsAppNumber"] = "WhatsApp Number must include the country code, e.g. +91 98765 43210.";
+			}
+
 			return e;
+		}
+
+		// DD/MM/YYYY -> date (null when blank / invalid)
+		internal static DateTime? ParseDmy(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value)) return null;
+			if (!DateTime.TryParseExact(value.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+				return null;
+			return d.Year < 1900 || d.Year > 2100 ? null : d;
 		}
 
 		// Optional text -> NULL in the database when left blank

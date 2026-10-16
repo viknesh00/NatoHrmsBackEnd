@@ -16,6 +16,10 @@
 		public string? NConsEmail { get; set; }
 		public string? NConsEmailStatus { get; set; }
 		public string PersonalEmail { get; set; }
+		public string? VisaType { get; set; }
+		public DateTime? WorkVisaExpiryDate { get; set; }
+		public string? HasSiemensIdCard { get; set; }
+		public string? WhatsAppNumber { get; set; }
 		public DateTime SubmittedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
 		public string? UpdatedBy { get; set; }
