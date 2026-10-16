@@ -4,5 +4,7 @@
 	public class EmployeeDetailsUpdateRequest : EmployeeDetailsRequest
 	{
 		public int SubmissionId { get; set; }
+		public new IFormFile? PassportCopy { get; set; }
+		public new IFormFile? PassportPhoto { get; set; }
 	}
 }

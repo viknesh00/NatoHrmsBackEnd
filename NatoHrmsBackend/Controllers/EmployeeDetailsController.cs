@@ -57,7 +57,7 @@ namespace NatoHrmsBackend.Controllers
 
 			// Duplicate submission check (same passport number)
 			bool alreadySubmitted = await _context.EmployeeDetailSubmissions
-				.AnyAsync(s => s.PassportNo == passportNo);
+				.AnyAsync(s => s.PassportNo == passportNo && !s.IsDeleted);
 
 			if (alreadySubmitted)
 				return Conflict(new { message = "Details for this passport number have already been submitted. Please contact HR if you need to make a correction." });
@@ -74,12 +74,12 @@ namespace NatoHrmsBackend.Controllers
 					new SqlParameter("@PlaceOfBirth", model.PlaceOfBirth.Trim()),
 					new SqlParameter("@MobileNumber", model.MobileNumber.Trim()),
 					new SqlParameter("@PassportNo", passportNo),
-					new SqlParameter("@SALCode", model.SALCode.Trim()),
+					new SqlParameter("@SALCode", EmployeeDetailsController.DbOrNull(model.SALCode)),
 					new SqlParameter("@City", model.City.Trim()),
 					new SqlParameter("@Country", model.Country.Trim()),
 					new SqlParameter("@CurrentAddress", model.CurrentAddress.Trim()),
-					new SqlParameter("@NConsEmail", model.NConsEmail.Trim()),
-					new SqlParameter("@NConsEmailStatus", model.NConsEmailStatus.Trim()),
+					new SqlParameter("@NConsEmail", EmployeeDetailsController.DbOrNull(model.NConsEmail)),
+					new SqlParameter("@NConsEmailStatus", EmployeeDetailsController.DbOrNull(model.NConsEmailStatus)),
 					new SqlParameter("@PersonalEmail", model.PersonalEmail.Trim()),
 					new SqlParameter("@SubmittedFromIp", (object?)HttpContext.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value),
 					new SqlParameter("@PassportCopyFileName", passportCopy.FileName),
@@ -111,9 +111,9 @@ namespace NatoHrmsBackend.Controllers
 					{
 						var body = EmailTemplates.EmployeeDetailsSubmittedEmail(
 							id, firstName, lastName, dob.ToString("dd/MM/yyyy"), model.PlaceOfBirth.Trim(),
-							model.MobileNumber.Trim(), passportNo, model.SALCode.Trim(), model.City.Trim(),
-							model.Country.Trim(), model.CurrentAddress.Trim(), model.NConsEmail.Trim(),
-							model.NConsEmailStatus.Trim(), model.PersonalEmail.Trim(),
+							model.MobileNumber.Trim(), passportNo, OrDash(model.SALCode), model.City.Trim(),
+							model.Country.Trim(), model.CurrentAddress.Trim(), OrDash(model.NConsEmail),
+							OrDash(model.NConsEmailStatus), model.PersonalEmail.Trim(),
 							DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
 
 						await _emailService.SendEmail(
@@ -197,20 +197,21 @@ namespace NatoHrmsBackend.Controllers
 			if (!e.ContainsKey("passportNo") && !PassportRegex.IsMatch(m.PassportNo.Trim()))
 				e["passportNo"] = "Passport No. must be 6-20 letters or digits.";
 
-			Required("salCode", "SAL Code", m.SALCode, 50);
-			if (!e.ContainsKey("salCode") && !SalRegex.IsMatch(m.SALCode.Trim()))
+			// SAL Code is optional
+			if (!string.IsNullOrWhiteSpace(m.SALCode) && !SalRegex.IsMatch(m.SALCode.Trim()))
 				e["salCode"] = "SAL Code contains invalid characters.";
 
 			Required("city", "City", m.City, 100);
 			Required("country", "Country", m.Country, 100);
 			Required("currentAddress", "Current Address", m.CurrentAddress, 500, allowNewLine: true);
 
-			Required("nConsEmail", "N-Cons Email ID", m.NConsEmail, 150);
-			if (!e.ContainsKey("nConsEmail") && !EmailRegex.IsMatch(m.NConsEmail.Trim()))
+			// N-Cons Email ID and N-Cons Email Status are optional
+			if (!string.IsNullOrWhiteSpace(m.NConsEmail)
+				&& (m.NConsEmail.Trim().Length > 150 || !EmailRegex.IsMatch(m.NConsEmail.Trim())))
 				e["nConsEmail"] = "Please enter a valid N-Cons Email ID.";
 
 			var status = m.NConsEmailStatus?.Trim();
-			if (status != "Enabled" && status != "Disabled")
+			if (!string.IsNullOrEmpty(status) && status != "Enabled" && status != "Disabled")
 				e["nConsEmailStatus"] = "N-Cons Email Status must be Enabled or Disabled.";
 
 			Required("personalEmail", "Personal Email ID", m.PersonalEmail, 150);
@@ -219,6 +220,14 @@ namespace NatoHrmsBackend.Controllers
 
 			return e;
 		}
+
+		// Optional text -> NULL in the database when left blank
+		internal static object DbOrNull(string? value) =>
+			string.IsNullOrWhiteSpace(value) ? (object)DBNull.Value : value.Trim();
+
+		// Optional text -> "-" in the email when left blank
+		internal static string OrDash(string? value) =>
+			string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
 		internal sealed class UploadedFile
 		{

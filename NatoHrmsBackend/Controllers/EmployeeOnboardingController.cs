@@ -92,12 +92,12 @@ namespace NatoHrmsBackend.Controllers
 			if (fileErrors.Count > 0)
 				return BadRequest(new { message = fileErrors.First().Value, errors = fileErrors });
 
-			var exists = await _context.EmployeeDetailSubmissions.AnyAsync(s => s.SubmissionId == model.SubmissionId);
+			var exists = await _context.EmployeeDetailSubmissions.AnyAsync(s => s.SubmissionId == model.SubmissionId && !s.IsDeleted);
 			if (!exists) return NotFound(new { message = "Submission not found." });
 
 			var passportNo = model.PassportNo.Trim().ToUpperInvariant();
 			bool duplicate = await _context.EmployeeDetailSubmissions
-				.AnyAsync(s => s.PassportNo == passportNo && s.SubmissionId != model.SubmissionId);
+				.AnyAsync(s => s.PassportNo == passportNo && s.SubmissionId != model.SubmissionId && !s.IsDeleted);
 			if (duplicate)
 				return Conflict(new { message = "Another submission already uses this passport number." });
 
@@ -110,12 +110,12 @@ namespace NatoHrmsBackend.Controllers
 				new SqlParameter("@PlaceOfBirth", model.PlaceOfBirth.Trim()),
 				new SqlParameter("@MobileNumber", model.MobileNumber.Trim()),
 				new SqlParameter("@PassportNo", passportNo),
-				new SqlParameter("@SALCode", model.SALCode.Trim()),
+				new SqlParameter("@SALCode", EmployeeDetailsController.DbOrNull(model.SALCode)),
 				new SqlParameter("@City", model.City.Trim()),
 				new SqlParameter("@Country", model.Country.Trim()),
 				new SqlParameter("@CurrentAddress", model.CurrentAddress.Trim()),
-				new SqlParameter("@NConsEmail", model.NConsEmail.Trim()),
-				new SqlParameter("@NConsEmailStatus", model.NConsEmailStatus.Trim()),
+				new SqlParameter("@NConsEmail", EmployeeDetailsController.DbOrNull(model.NConsEmail)),
+				new SqlParameter("@NConsEmailStatus", EmployeeDetailsController.DbOrNull(model.NConsEmailStatus)),
 				new SqlParameter("@PersonalEmail", model.PersonalEmail.Trim()),
 				new SqlParameter("@UpdatedBy", HttpContext.User.Identity.Name),
 				new SqlParameter("@PassportCopyFileName", (object?)passportCopy?.FileName ?? DBNull.Value),
@@ -136,6 +136,23 @@ namespace NatoHrmsBackend.Controllers
 			);
 
 			return Ok(new { message = "Employee details updated successfully." });
+		}
+
+		// POST: api/EmployeeOnboarding/Delete   body: [1,2,3]
+		// Soft delete: the submissions are flagged as deleted (data and files are kept in the database)
+		[HttpPost("Delete")]
+		public async Task<IActionResult> Delete([FromBody] int[] ids)
+		{
+			if (ids == null || ids.Length == 0)
+				return BadRequest(new { message = "No records selected." });
+
+			await _context.Database.ExecuteSqlRawAsync(
+				"EXEC DeleteEmployeeDetails @p0, @p1",
+				string.Join(",", ids.Distinct()),
+				HttpContext.User.Identity?.Name ?? (object)DBNull.Value
+			);
+
+			return Ok(new { message = "Deleted successfully." });
 		}
 
 		// POST: api/EmployeeOnboarding/Download   { all: true }  or  { ids: [1,2] }
@@ -181,11 +198,20 @@ namespace NatoHrmsBackend.Controllers
 				foreach (var row in rows)
 				{
 					var folder = SafeName($"{row.FirstName}_{row.LastName}_{row.PassportNo}") + "/";
+					var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 					foreach (var f in files.Where(x => x.SubmissionId == row.SubmissionId && x.FileData != null))
 					{
-						var label = f.FileType == "PassportCopy" ? "Passport_Copy" : "Passport_Photo";
-						var ext = Path.GetExtension(f.FileName);
-						var fe = archive.CreateEntry(folder + label + ext, CompressionLevel.Fastest);
+						// Keep the original uploaded file name so it matches the Excel columns exactly.
+						// Only if both files share the same name, the second one gets a suffix.
+						var name = Path.GetFileName(f.FileName);
+						if (!usedNames.Add(name))
+						{
+							var suffix = f.FileType == "PassportCopy" ? "_Passport_Copy" : "_Passport_Photo";
+							name = Path.GetFileNameWithoutExtension(name) + suffix + Path.GetExtension(name);
+							usedNames.Add(name);
+						}
+
+						var fe = archive.CreateEntry(folder + name, CompressionLevel.Fastest);
 						using var fs = fe.Open();
 						await fs.WriteAsync(f.FileData, 0, f.FileData.Length);
 					}
@@ -228,12 +254,12 @@ namespace NatoHrmsBackend.Controllers
 				ws.Cell(r, 4).Value = x.PlaceOfBirth;
 				ws.Cell(r, 5).SetValue(x.MobileNumber);       // keep as text (leading +)
 				ws.Cell(r, 6).SetValue(x.PassportNo);
-				ws.Cell(r, 7).SetValue(x.SALCode);
+				ws.Cell(r, 7).SetValue(x.SALCode ?? "");
 				ws.Cell(r, 8).Value = x.City;
 				ws.Cell(r, 9).Value = x.Country;
 				ws.Cell(r, 10).Value = x.CurrentAddress;
-				ws.Cell(r, 11).Value = x.NConsEmail;
-				ws.Cell(r, 12).Value = x.NConsEmailStatus;
+				ws.Cell(r, 11).Value = x.NConsEmail ?? "";
+				ws.Cell(r, 12).Value = x.NConsEmailStatus ?? "";
 				ws.Cell(r, 13).Value = x.PersonalEmail;
 				ws.Cell(r, 14).Value = x.PassportCopyFileName ?? "";
 				ws.Cell(r, 15).Value = x.PassportPhotoFileName ?? "";
