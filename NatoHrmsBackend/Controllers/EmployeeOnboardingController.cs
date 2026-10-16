@@ -1,0 +1,250 @@
+﻿using ClosedXML.Excel;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using NatoHrmsBackend.Data;
+using NatoHrmsBackend.Models;
+using System.Data;
+using System.IO.Compression;
+using System.Text.RegularExpressions;
+
+namespace NatoHrmsBackend.Controllers
+{
+	// HRMS screen for the submissions received from the public employee details form.
+	// Menu visibility (department / role) is managed in the frontend Sidebar, like the other screens.
+	[Authorize]
+	[ApiController]
+	[Route("api/[controller]")]
+	public class EmployeeOnboardingController : ControllerBase
+	{
+		private readonly ApplicationDbContext _context;
+
+		public EmployeeOnboardingController(ApplicationDbContext context)
+		{
+			_context = context;
+		}
+
+		// GET: api/EmployeeOnboarding/GetAll
+		[HttpGet("GetAll")]
+		public async Task<IActionResult> GetAll()
+		{
+			var result = await _context.EmployeeDetailLists
+				.FromSqlRaw("EXEC GetEmployeeDetails")
+				.AsNoTracking()
+				.ToListAsync();
+
+			return Ok(result);
+		}
+
+		// GET: api/EmployeeOnboarding/Get/5
+		[HttpGet("Get/{id}")]
+		public async Task<IActionResult> Get(int id)
+		{
+			var rows = await _context.EmployeeDetailLists
+				.FromSqlRaw("EXEC GetEmployeeDetails @p0", id)
+				.AsNoTracking()
+				.ToListAsync();
+
+			var row = rows.FirstOrDefault();
+			if (row == null) return NotFound(new { message = "Submission not found." });
+			return Ok(row);
+		}
+
+		// GET: api/EmployeeOnboarding/File/5/PassportCopy  (opens / downloads one attachment)
+		[HttpGet("File/{id}/{fileType}")]
+		public async Task<IActionResult> GetFile(int id, string fileType)
+		{
+			if (fileType != "PassportCopy" && fileType != "PassportPhoto")
+				return BadRequest(new { message = "Invalid file type." });
+
+			var files = await _context.EmployeeDetailFileResults
+				.FromSqlRaw("EXEC GetEmployeeDetailFiles @p0", id.ToString())
+				.AsNoTracking()
+				.ToListAsync();
+
+			var file = files.FirstOrDefault(f => f.FileType == fileType);
+			if (file == null || file.FileData == null || file.FileData.Length == 0)
+				return NotFound(new { message = "File not found." });
+
+			return File(file.FileData, file.ContentType, file.FileName);
+		}
+
+		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files)
+		[HttpPost("Update")]
+		[RequestSizeLimit(12 * 1024 * 1024)]
+		public async Task<IActionResult> Update([FromForm] EmployeeDetailsUpdateRequest model)
+		{
+			if (model == null || model.SubmissionId <= 0)
+				return BadRequest(new { message = "Invalid request." });
+
+			var errors = EmployeeDetailsController.Validate(model, out var dob);
+			if (errors.Count > 0)
+				return BadRequest(new { message = errors.First().Value, errors });
+
+			// Files are optional on edit - only validated/replaced when sent
+			var fileErrors = new Dictionary<string, string>();
+			EmployeeDetailsController.UploadedFile passportCopy = null, passportPhoto = null;
+			if (model.PassportCopy != null && model.PassportCopy.Length > 0)
+				passportCopy = await EmployeeDetailsController.ReadFileAsync(model.PassportCopy, "Passport copy", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "passportCopy");
+			if (model.PassportPhoto != null && model.PassportPhoto.Length > 0)
+				passportPhoto = await EmployeeDetailsController.ReadFileAsync(model.PassportPhoto, "Passport-size photo", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "passportPhoto");
+			if (fileErrors.Count > 0)
+				return BadRequest(new { message = fileErrors.First().Value, errors = fileErrors });
+
+			var exists = await _context.EmployeeDetailSubmissions.AnyAsync(s => s.SubmissionId == model.SubmissionId);
+			if (!exists) return NotFound(new { message = "Submission not found." });
+
+			var passportNo = model.PassportNo.Trim().ToUpperInvariant();
+			bool duplicate = await _context.EmployeeDetailSubmissions
+				.AnyAsync(s => s.PassportNo == passportNo && s.SubmissionId != model.SubmissionId);
+			if (duplicate)
+				return Conflict(new { message = "Another submission already uses this passport number." });
+
+			var parameters = new[]
+			{
+				new SqlParameter("@SubmissionId", model.SubmissionId),
+				new SqlParameter("@FirstName", model.FirstName.Trim()),
+				new SqlParameter("@LastName", model.LastName.Trim()),
+				new SqlParameter("@DateOfBirth", SqlDbType.Date) { Value = dob },
+				new SqlParameter("@PlaceOfBirth", model.PlaceOfBirth.Trim()),
+				new SqlParameter("@MobileNumber", model.MobileNumber.Trim()),
+				new SqlParameter("@PassportNo", passportNo),
+				new SqlParameter("@SALCode", model.SALCode.Trim()),
+				new SqlParameter("@City", model.City.Trim()),
+				new SqlParameter("@Country", model.Country.Trim()),
+				new SqlParameter("@CurrentAddress", model.CurrentAddress.Trim()),
+				new SqlParameter("@NConsEmail", model.NConsEmail.Trim()),
+				new SqlParameter("@NConsEmailStatus", model.NConsEmailStatus.Trim()),
+				new SqlParameter("@PersonalEmail", model.PersonalEmail.Trim()),
+				new SqlParameter("@UpdatedBy", HttpContext.User.Identity.Name),
+				new SqlParameter("@PassportCopyFileName", (object?)passportCopy?.FileName ?? DBNull.Value),
+				new SqlParameter("@PassportCopyContentType", (object?)passportCopy?.ContentType ?? DBNull.Value),
+				new SqlParameter("@PassportCopyData", SqlDbType.VarBinary) { Value = (object?)passportCopy?.Content ?? DBNull.Value },
+				new SqlParameter("@PassportPhotoFileName", (object?)passportPhoto?.FileName ?? DBNull.Value),
+				new SqlParameter("@PassportPhotoContentType", (object?)passportPhoto?.ContentType ?? DBNull.Value),
+				new SqlParameter("@PassportPhotoData", SqlDbType.VarBinary) { Value = (object?)passportPhoto?.Content ?? DBNull.Value }
+			};
+
+			await _context.Database.ExecuteSqlRawAsync(
+				@"EXEC UpdateEmployeeDetails
+				@SubmissionId, @FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
+				@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @UpdatedBy,
+				@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
+				@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData",
+				parameters
+			);
+
+			return Ok(new { message = "Employee details updated successfully." });
+		}
+
+		// POST: api/EmployeeOnboarding/Download   { all: true }  or  { ids: [1,2] }
+		// ZIP = Employee_Details.xlsx + one folder per employee holding the passport copy and photo
+		[HttpPost("Download")]
+		public async Task<IActionResult> Download([FromBody] EmployeeOnboardingDownloadRequest request)
+		{
+			bool all = request?.All == true;
+			var ids = request?.Ids ?? Array.Empty<int>();
+			if (!all && ids.Length == 0)
+				return BadRequest(new { message = "No records selected." });
+
+			var rows = await _context.EmployeeDetailLists
+				.FromSqlRaw("EXEC GetEmployeeDetails")
+				.AsNoTracking()
+				.ToListAsync();
+
+			if (!all) rows = rows.Where(r => ids.Contains(r.SubmissionId)).ToList();
+			if (rows.Count == 0) return NotFound(new { message = "No records found." });
+
+			var files = all
+				? await _context.EmployeeDetailFileResults
+					.FromSqlRaw("EXEC GetEmployeeDetailFiles")
+					.AsNoTracking()
+					.ToListAsync()
+				: await _context.EmployeeDetailFileResults
+					.FromSqlRaw("EXEC GetEmployeeDetailFiles @p0", string.Join(",", rows.Select(r => r.SubmissionId)))
+					.AsNoTracking()
+					.ToListAsync();
+
+			using var zipStream = new MemoryStream();
+			using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
+			{
+				// 1) workbook with all details
+				var entry = archive.CreateEntry("Employee_Details.xlsx", CompressionLevel.Fastest);
+				using (var es = entry.Open())
+				{
+					var bytes = BuildWorkbook(rows);
+					await es.WriteAsync(bytes, 0, bytes.Length);
+				}
+
+				// 2) attachments, one folder per employee
+				foreach (var row in rows)
+				{
+					var folder = SafeName($"{row.FirstName}_{row.LastName}_{row.PassportNo}") + "/";
+					foreach (var f in files.Where(x => x.SubmissionId == row.SubmissionId && x.FileData != null))
+					{
+						var label = f.FileType == "PassportCopy" ? "Passport_Copy" : "Passport_Photo";
+						var ext = Path.GetExtension(f.FileName);
+						var fe = archive.CreateEntry(folder + label + ext, CompressionLevel.Fastest);
+						using var fs = fe.Open();
+						await fs.WriteAsync(f.FileData, 0, f.FileData.Length);
+					}
+				}
+			}
+
+			return File(zipStream.ToArray(), "application/zip",
+				$"Employee_Details_{DateTime.Now:yyyyMMddHHmmss}.zip");
+		}
+
+		// ---------------------------------------------------------------------
+		private static string SafeName(string value) =>
+			Regex.Replace(value ?? "", @"[^\w\-]+", "_").Trim('_');
+
+		private static byte[] BuildWorkbook(List<EmployeeDetailList> rows)
+		{
+			using var wb = new XLWorkbook();
+			var ws = wb.Worksheets.Add("Employee Details");
+
+			var headers = new[]
+			{
+				"First Name", "Last Name", "Date of Birth", "Place of Birth", "Mobile Number", "Passport No.",
+				"SAL Code", "City", "Country", "Current Address", "N-Cons Email ID", "N-Cons Email Status",
+				"Personal Email ID", "Passport Copy", "Passport Photo", "Submitted At"
+			};
+			for (int c = 0; c < headers.Length; c++)
+			{
+				var cell = ws.Cell(1, c + 1);
+				cell.Value = headers[c];
+				cell.Style.Font.Bold = true;
+				cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FE");
+			}
+
+			int r = 2;
+			foreach (var x in rows)
+			{
+				ws.Cell(r, 1).Value = x.FirstName;
+				ws.Cell(r, 2).Value = x.LastName;
+				ws.Cell(r, 3).Value = x.DateOfBirth.ToString("dd/MM/yyyy");
+				ws.Cell(r, 4).Value = x.PlaceOfBirth;
+				ws.Cell(r, 5).SetValue(x.MobileNumber);       // keep as text (leading +)
+				ws.Cell(r, 6).SetValue(x.PassportNo);
+				ws.Cell(r, 7).SetValue(x.SALCode);
+				ws.Cell(r, 8).Value = x.City;
+				ws.Cell(r, 9).Value = x.Country;
+				ws.Cell(r, 10).Value = x.CurrentAddress;
+				ws.Cell(r, 11).Value = x.NConsEmail;
+				ws.Cell(r, 12).Value = x.NConsEmailStatus;
+				ws.Cell(r, 13).Value = x.PersonalEmail;
+				ws.Cell(r, 14).Value = x.PassportCopyFileName ?? "";
+				ws.Cell(r, 15).Value = x.PassportPhotoFileName ?? "";
+				ws.Cell(r, 16).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
+				r++;
+			}
+
+			ws.Columns().AdjustToContents();
+			using var ms = new MemoryStream();
+			wb.SaveAs(ms);
+			return ms.ToArray();
+		}
+	}
+}

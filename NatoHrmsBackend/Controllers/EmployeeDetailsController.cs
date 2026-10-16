@@ -154,7 +154,7 @@ namespace NatoHrmsBackend.Controllers
 		private static bool HasControlChars(string v, bool allowNewLine = false) =>
 			v.Any(c => char.IsControl(c) && !(allowNewLine && (c == '\n' || c == '\r')));
 
-		private static Dictionary<string, string> Validate(EmployeeDetailsRequest m, out DateTime dob)
+		internal static Dictionary<string, string> Validate(EmployeeDetailsRequest m, out DateTime dob)
 		{
 			var e = new Dictionary<string, string>();
 			dob = default;
@@ -220,7 +220,7 @@ namespace NatoHrmsBackend.Controllers
 			return e;
 		}
 
-		private sealed class UploadedFile
+		internal sealed class UploadedFile
 		{
 			public string FileName { get; set; } = "";
 			public string ContentType { get; set; } = "";
@@ -229,7 +229,7 @@ namespace NatoHrmsBackend.Controllers
 
 		// Validates extension, size and real file signature, then returns the bytes.
 		// The stored content type is derived from the file signature, not from what the client claims.
-		private static async Task<UploadedFile> ReadFileAsync(IFormFile file, string label, string[] allowedExtensions, Dictionary<string, string> errors, string key)
+		internal static async Task<UploadedFile> ReadFileAsync(IFormFile file, string label, string[] allowedExtensions, Dictionary<string, string> errors, string key)
 		{
 			if (file == null || file.Length == 0)
 			{
