@@ -19,6 +19,7 @@
 		public string? VisaType { get; set; }
 		public DateTime? WorkVisaExpiryDate { get; set; }
 		public string? HasSiemensIdCard { get; set; }
+		public DateTime? SiemensIdReceivedMonth { get; set; }
 		public string? WhatsAppNumber { get; set; }
 		public DateTime SubmittedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }

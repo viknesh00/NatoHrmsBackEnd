@@ -320,7 +320,7 @@ namespace NatoHrmsBackend.Services
 			int submissionId, string firstName, string lastName, string dateOfBirth, string placeOfBirth,
 			string mobileNumber, string passportNo, string salCode, string city, string country,
 			string currentAddress, string nConsEmail, string nConsEmailStatus, string personalEmail,
-			string visaType, string workVisaExpiry, string hasSiemensIdCard, string whatsAppNumber, string submittedAt)
+			string visaType, string workVisaExpiry, string hasSiemensIdCard, string siemensIdReceivedMonth, string whatsAppNumber, string submittedAt)
 		{
 			static string E(string v) => System.Net.WebUtility.HtmlEncode(v ?? "");
 
@@ -351,6 +351,7 @@ namespace NatoHrmsBackend.Services
                   {InfoRow("Visa / Work Permit Type", E(visaType))}
                   {InfoRow("Work Visa Expiry Date", E(workVisaExpiry))}
                   {InfoRow("Siemens ID Card", E(hasSiemensIdCard))}
+                  {InfoRow("Siemens ID Received Month", E(siemensIdReceivedMonth))}
                   {InfoRow("WhatsApp Number", E(whatsAppNumber))}
                   {InfoRow("Submitted At", E(submittedAt))}
                 ")}

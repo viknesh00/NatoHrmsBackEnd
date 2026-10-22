@@ -84,6 +84,7 @@ namespace NatoHrmsBackend.Controllers
 					new SqlParameter("@VisaType", EmployeeDetailsController.DbOrNull(model.VisaType)),
 					new SqlParameter("@WorkVisaExpiryDate", SqlDbType.Date) { Value = (object?)EmployeeDetailsController.ParseDmy(model.WorkVisaExpiryDate) ?? DBNull.Value },
 					new SqlParameter("@HasSiemensIdCard", EmployeeDetailsController.DbOrNull(model.HasSiemensIdCard)),
+					new SqlParameter("@SiemensIdReceivedMonth", SqlDbType.Date) { Value = model.HasSiemensIdCard?.Trim() == "Yes" ? (object?)EmployeeDetailsController.ParseMonthYear(model.SiemensIdReceivedMonth) ?? DBNull.Value : DBNull.Value },
 					new SqlParameter("@WhatsAppNumber", EmployeeDetailsController.DbOrNull(model.WhatsAppNumber)),
 					new SqlParameter("@SubmittedFromIp", (object?)HttpContext.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value),
 					new SqlParameter("@PassportCopyFileName", passportCopy.FileName),
@@ -98,7 +99,7 @@ namespace NatoHrmsBackend.Controllers
 				await _context.Database.ExecuteSqlRawAsync(
 					@"EXEC InsertEmployeeDetails
 					@FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
-					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @WhatsAppNumber, @SubmittedFromIp,
+					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @SiemensIdReceivedMonth, @WhatsAppNumber, @SubmittedFromIp,
 					@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
 					@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData,
 					@SubmissionId OUTPUT",
@@ -119,7 +120,9 @@ namespace NatoHrmsBackend.Controllers
 							model.Country.Trim(), model.CurrentAddress.Trim(), OrDash(model.NConsEmail),
 							OrDash(model.NConsEmailStatus), model.PersonalEmail.Trim(),
 							OrDash(model.VisaType), ParseDmy(model.WorkVisaExpiryDate)?.ToString("dd/MM/yyyy") ?? "-",
-							OrDash(model.HasSiemensIdCard), OrDash(model.WhatsAppNumber),
+							OrDash(model.HasSiemensIdCard),
+							ParseMonthYear(model.SiemensIdReceivedMonth) is DateTime sm && model.HasSiemensIdCard?.Trim() == "Yes" ? sm.ToString("MMM yyyy", CultureInfo.InvariantCulture) : "-",
+							OrDash(model.WhatsAppNumber),
 							DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
 
 						await _emailService.SendEmail(
@@ -232,9 +235,18 @@ namespace NatoHrmsBackend.Controllers
 			if (!string.IsNullOrWhiteSpace(m.WorkVisaExpiryDate) && ParseDmy(m.WorkVisaExpiryDate) == null)
 				e["workVisaExpiryDate"] = "Work Visa Expiry Date must be a valid date in DD/MM/YYYY format.";
 
+			// Siemens ID card - mandatory; the month the ID was received is mandatory when the answer is Yes
 			var siemens = m.HasSiemensIdCard?.Trim();
-			if (!string.IsNullOrEmpty(siemens) && siemens != "Yes" && siemens != "No")
-				e["hasSiemensIdCard"] = "Siemens ID Card must be Yes or No.";
+			if (siemens != "Yes" && siemens != "No")
+				e["hasSiemensIdCard"] = "Please select Yes or No for Siemens ID Card.";
+			else if (siemens == "Yes")
+			{
+				var received = ParseMonthYear(m.SiemensIdReceivedMonth);
+				if (string.IsNullOrWhiteSpace(m.SiemensIdReceivedMonth))
+					e["siemensIdReceivedMonth"] = "Please select the month the Siemens ID was received.";
+				else if (received == null || received.Value > new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1))
+					e["siemensIdReceivedMonth"] = "Siemens ID received month must be a valid month (MM/YYYY), not in the future.";
+			}
 
 			if (!string.IsNullOrWhiteSpace(m.WhatsAppNumber))
 			{
@@ -254,6 +266,15 @@ namespace NatoHrmsBackend.Controllers
 			if (!DateTime.TryParseExact(value.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
 				return null;
 			return d.Year < 1900 || d.Year > 2100 ? null : d;
+		}
+
+		// MM/YYYY -> first day of that month (null when blank / invalid)
+		internal static DateTime? ParseMonthYear(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value)) return null;
+			if (!DateTime.TryParseExact(value.Trim(), "MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+				return null;
+			return d.Year < 1990 ? null : d;
 		}
 
 		// Optional text -> NULL in the database when left blank
