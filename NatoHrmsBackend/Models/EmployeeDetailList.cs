@@ -16,6 +16,7 @@
 		public string? NConsEmail { get; set; }
 		public string? NConsEmailStatus { get; set; }
 		public string PersonalEmail { get; set; }
+		public int CertificateCount { get; set; }
 		public string? VisaType { get; set; }
 		public DateTime? WorkVisaExpiryDate { get; set; }
 		public string? HasSiemensIdCard { get; set; }

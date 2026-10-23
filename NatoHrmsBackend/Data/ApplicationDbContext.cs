@@ -37,6 +37,7 @@ namespace NatoHrmsBackend.Data
 		public DbSet<EmployeeDetailSubmission> EmployeeDetailSubmissions { get; set; }
 		public DbSet<EmployeeDetailList> EmployeeDetailLists { get; set; }
 		public DbSet<EmployeeDetailFile> EmployeeDetailFileResults { get; set; }
+		public DbSet<EmployeeCertificate> EmployeeCertificateResults { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
@@ -68,6 +69,7 @@ namespace NatoHrmsBackend.Data
 			modelBuilder.Entity<EmployeeDetailSubmission>().HasNoKey();
 			modelBuilder.Entity<EmployeeDetailList>().HasNoKey();
 			modelBuilder.Entity<EmployeeDetailFile>().HasNoKey();
+			modelBuilder.Entity<EmployeeCertificate>().HasNoKey();
 
 
 

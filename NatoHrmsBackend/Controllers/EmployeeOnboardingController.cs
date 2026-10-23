@@ -70,6 +70,34 @@ namespace NatoHrmsBackend.Controllers
 			return File(file.FileData, file.ContentType, file.FileName);
 		}
 
+		// GET: api/EmployeeOnboarding/Certificates/5   (list of certificates of one submission, no file bytes)
+		[HttpGet("Certificates/{id}")]
+		public async Task<IActionResult> GetCertificates(int id)
+		{
+			var list = await _context.EmployeeCertificateResults
+				.FromSqlRaw("EXEC GetEmployeeCertificates @SubmissionIds = @p0, @IncludeData = @p1", id.ToString(), false)
+				.AsNoTracking()
+				.ToListAsync();
+
+			return Ok(list.Select(c => new { c.CertificateId, c.SubmissionId, c.FileName, c.ContentType, c.FileSize }));
+		}
+
+		// GET: api/EmployeeOnboarding/Certificate/12   (opens / downloads one certificate)
+		[HttpGet("Certificate/{certificateId}")]
+		public async Task<IActionResult> GetCertificate(int certificateId)
+		{
+			var list = await _context.EmployeeCertificateResults
+				.FromSqlRaw("EXEC GetEmployeeCertificates @CertificateId = @p0", certificateId)
+				.AsNoTracking()
+				.ToListAsync();
+
+			var cert = list.FirstOrDefault();
+			if (cert == null || cert.FileData == null || cert.FileData.Length == 0)
+				return NotFound(new { message = "File not found." });
+
+			return File(cert.FileData, cert.ContentType, cert.FileName);
+		}
+
 		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files)
 		[HttpPost("Update")]
 		[RequestSizeLimit(12 * 1024 * 1024)]
@@ -188,6 +216,16 @@ namespace NatoHrmsBackend.Controllers
 					.AsNoTracking()
 					.ToListAsync();
 
+			var certificates = all
+				? await _context.EmployeeCertificateResults
+					.FromSqlRaw("EXEC GetEmployeeCertificates")
+					.AsNoTracking()
+					.ToListAsync()
+				: await _context.EmployeeCertificateResults
+					.FromSqlRaw("EXEC GetEmployeeCertificates @SubmissionIds = @p0", string.Join(",", rows.Select(r => r.SubmissionId)))
+					.AsNoTracking()
+					.ToListAsync();
+
 			using var zipStream = new MemoryStream();
 			using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
 			{
@@ -195,7 +233,7 @@ namespace NatoHrmsBackend.Controllers
 				var entry = archive.CreateEntry("Employee_Details.xlsx", CompressionLevel.Fastest);
 				using (var es = entry.Open())
 				{
-					var bytes = BuildWorkbook(rows);
+					var bytes = BuildWorkbook(rows, certificates);
 					await es.WriteAsync(bytes, 0, bytes.Length);
 				}
 
@@ -220,6 +258,16 @@ namespace NatoHrmsBackend.Controllers
 						using var fs = fe.Open();
 						await fs.WriteAsync(f.FileData, 0, f.FileData.Length);
 					}
+
+					// certificates go into a "Certificates" sub-folder, original file names kept
+					var certNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+					foreach (var cert in certificates.Where(x => x.SubmissionId == row.SubmissionId && x.FileData != null))
+					{
+						var cname = UniqueCertificateName(Path.GetFileName(cert.FileName), certNames);
+						var ce = archive.CreateEntry(folder + "Certificates/" + cname, CompressionLevel.Fastest);
+						using var cs = ce.Open();
+						await cs.WriteAsync(cert.FileData, 0, cert.FileData.Length);
+					}
 				}
 			}
 
@@ -231,7 +279,20 @@ namespace NatoHrmsBackend.Controllers
 		private static string SafeName(string value) =>
 			Regex.Replace(value ?? "", @"[^\w\-]+", "_").Trim('_');
 
-		private static byte[] BuildWorkbook(List<EmployeeDetailList> rows)
+		// Same name twice (e.g. two "certificate.pdf") -> certificate (2).pdf
+		private static string UniqueCertificateName(string name, HashSet<string> used)
+		{
+			if (used.Add(name)) return name;
+			var baseName = Path.GetFileNameWithoutExtension(name);
+			var ext = Path.GetExtension(name);
+			for (int n = 2; ; n++)
+			{
+				var candidate = $"{baseName} ({n}){ext}";
+				if (used.Add(candidate)) return candidate;
+			}
+		}
+
+		private static byte[] BuildWorkbook(List<EmployeeDetailList> rows, List<EmployeeCertificate> certificates)
 		{
 			using var wb = new XLWorkbook();
 			var ws = wb.Worksheets.Add("Employee Details");
@@ -241,7 +302,7 @@ namespace NatoHrmsBackend.Controllers
 				"First Name", "Last Name", "Date of Birth", "Place of Birth", "Mobile Number", "Passport No.",
 				"SAL Code", "City", "Country", "Current Address", "N-Cons Email ID", "N-Cons Email Status",
 				"Personal Email ID", "Visa / Work Permit Type", "Work Visa Expiry Date", "Siemens ID Card", "Siemens ID Received Month", "WhatsApp Number",
-				"Passport Copy", "Passport Photo", "Submitted At"
+				"Passport Copy", "Passport Photo", "Certificates", "Submitted At"
 			};
 			for (int c = 0; c < headers.Length; c++)
 			{
@@ -274,7 +335,12 @@ namespace NatoHrmsBackend.Controllers
 				ws.Cell(r, 18).SetValue(x.WhatsAppNumber ?? "");
 				ws.Cell(r, 19).Value = x.PassportCopyFileName ?? "";
 				ws.Cell(r, 20).Value = x.PassportPhotoFileName ?? "";
-				ws.Cell(r, 21).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
+				// certificate file names, in the same (de-duplicated) form as inside the ZIP
+				var excelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				ws.Cell(r, 21).Value = string.Join("; ", certificates
+					.Where(cf => cf.SubmissionId == x.SubmissionId)
+					.Select(cf => UniqueCertificateName(Path.GetFileName(cf.FileName), excelNames)));
+				ws.Cell(r, 22).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
 				r++;
 			}
 

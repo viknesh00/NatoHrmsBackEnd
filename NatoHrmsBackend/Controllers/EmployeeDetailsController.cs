@@ -16,6 +16,8 @@ namespace NatoHrmsBackend.Controllers
 	public class EmployeeDetailsController : ControllerBase
 	{
 		private const long MaxFileBytes = 5 * 1024 * 1024; // 5 MB per file
+		private const int MaxCertificates = 10;
+		private const long MaxCertificatesTotalBytes = 5 * 1024 * 1024; // 5 MB for all certificates together
 
 		private readonly ApplicationDbContext _context;
 		private readonly IEmailService _emailService;
@@ -33,7 +35,7 @@ namespace NatoHrmsBackend.Controllers
 		// Public endpoint - the employee details form is shared by link, no login required
 		[AllowAnonymous]
 		[HttpPost("Submit")]
-		[RequestSizeLimit(12 * 1024 * 1024)]
+		[RequestSizeLimit(20 * 1024 * 1024)]   // 2 passport files (5 MB each) + certificates (5 MB in total)
 		public async Task<IActionResult> Submit([FromForm] EmployeeDetailsRequest model)
 		{
 			if (model == null)
@@ -48,6 +50,21 @@ namespace NatoHrmsBackend.Controllers
 			var fileErrors = new Dictionary<string, string>();
 			var passportCopy = await ReadFileAsync(model.PassportCopy, "Passport copy", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "passportCopy");
 			var passportPhoto = await ReadFileAsync(model.PassportPhoto, "Passport-size photo", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "passportPhoto");
+
+			// Certificates are optional (max 10)
+			var certificates = new List<UploadedFile>();
+			var certFiles = model.Certificates?.Where(f => f != null && f.Length > 0).ToList() ?? new List<IFormFile>();
+			if (certFiles.Count > MaxCertificates)
+				fileErrors["certificates"] = $"You can upload a maximum of {MaxCertificates} certificates.";
+			else if (certFiles.Sum(f => f.Length) > MaxCertificatesTotalBytes)
+				fileErrors["certificates"] = "The total size of all certificates must not exceed 5 MB.";
+			else
+				for (int i = 0; i < certFiles.Count; i++)
+				{
+					var cert = await ReadFileAsync(certFiles[i], $"Certificate {i + 1}", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "certificates");
+					if (cert != null) certificates.Add(cert);
+				}
+
 			if (fileErrors.Count > 0)
 				return BadRequest(new { message = fileErrors.First().Value, errors = fileErrors });
 
@@ -96,6 +113,9 @@ namespace NatoHrmsBackend.Controllers
 					submissionId
 				};
 
+				// Details, passport files and certificates are saved together - all or nothing
+				await using var tx = await _context.Database.BeginTransactionAsync();
+
 				await _context.Database.ExecuteSqlRawAsync(
 					@"EXEC InsertEmployeeDetails
 					@FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
@@ -107,6 +127,18 @@ namespace NatoHrmsBackend.Controllers
 				);
 
 				int id = submissionId.Value is int v ? v : 0;
+
+				foreach (var cert in certificates)
+				{
+					await _context.Database.ExecuteSqlRawAsync(
+						"EXEC InsertEmployeeDetailCertificate @SubmissionId, @FileName, @ContentType, @FileData",
+						new SqlParameter("@SubmissionId", id),
+						new SqlParameter("@FileName", cert.FileName),
+						new SqlParameter("@ContentType", cert.ContentType),
+						new SqlParameter("@FileData", SqlDbType.VarBinary) { Value = cert.Content });
+				}
+
+				await tx.CommitAsync();
 
 				// Notify HR (non-blocking - the submission is already saved)
 				try
@@ -123,6 +155,7 @@ namespace NatoHrmsBackend.Controllers
 							OrDash(model.HasSiemensIdCard),
 							ParseMonthYear(model.SiemensIdReceivedMonth) is DateTime sm && model.HasSiemensIdCard?.Trim() == "Yes" ? sm.ToString("MMM yyyy", CultureInfo.InvariantCulture) : "-",
 							OrDash(model.WhatsAppNumber),
+							certificates.Count == 0 ? "None" : $"{certificates.Count} file(s) uploaded - available in the HRMS portal",
 							DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
 
 						await _emailService.SendEmail(

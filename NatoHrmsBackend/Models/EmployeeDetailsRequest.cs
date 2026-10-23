@@ -23,6 +23,8 @@
 		public string? SiemensIdReceivedMonth { get; set; } // MM/YYYY (when the answer is Yes)
 		public string? WhatsAppNumber { get; set; }        // with country code
 
+		public List<IFormFile>? Certificates { get; set; }   // optional, max 10 (JPG / PNG / PDF)
+
 		public IFormFile PassportCopy { get; set; }    // photo + passport number page (JPG / PNG / PDF)
 		public IFormFile PassportPhoto { get; set; }   // passport-size photo (JPG / PNG / PDF)
 	}
