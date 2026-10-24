@@ -46,6 +46,13 @@ namespace NatoHrmsBackend.Controllers
 			if (errors.Count > 0)
 				return BadRequest(new { message = errors.First().Value, errors });
 
+			// ---------- Consent line is mandatory on the public form ----------
+			if (!model.ConsentGiven)
+			{
+				const string consentMsg = "Please confirm that the information is shared with your consent.";
+				return BadRequest(new { message = consentMsg, errors = new Dictionary<string, string> { ["consentGiven"] = consentMsg } });
+			}
+
 			// ---------- Files: both are mandatory ----------
 			var fileErrors = new Dictionary<string, string>();
 			var passportCopy = await ReadFileAsync(model.PassportCopy, "Passport copy", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, fileErrors, "passportCopy");
@@ -103,6 +110,7 @@ namespace NatoHrmsBackend.Controllers
 					new SqlParameter("@HasSiemensIdCard", EmployeeDetailsController.DbOrNull(model.HasSiemensIdCard)),
 					new SqlParameter("@SiemensIdReceivedMonth", SqlDbType.Date) { Value = model.HasSiemensIdCard?.Trim() == "Yes" ? (object?)EmployeeDetailsController.ParseMonthYear(model.SiemensIdReceivedMonth) ?? DBNull.Value : DBNull.Value },
 					new SqlParameter("@WhatsAppNumber", EmployeeDetailsController.DbOrNull(model.WhatsAppNumber)),
+					new SqlParameter("@ConsentGiven", SqlDbType.Bit) { Value = model.ConsentGiven },
 					new SqlParameter("@SubmittedFromIp", (object?)HttpContext.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value),
 					new SqlParameter("@PassportCopyFileName", passportCopy.FileName),
 					new SqlParameter("@PassportCopyContentType", passportCopy.ContentType),
@@ -119,7 +127,7 @@ namespace NatoHrmsBackend.Controllers
 				await _context.Database.ExecuteSqlRawAsync(
 					@"EXEC InsertEmployeeDetails
 					@FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
-					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @SiemensIdReceivedMonth, @WhatsAppNumber, @SubmittedFromIp,
+					@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @SiemensIdReceivedMonth, @WhatsAppNumber, @ConsentGiven, @SubmittedFromIp,
 					@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
 					@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData,
 					@SubmissionId OUTPUT",
@@ -156,6 +164,7 @@ namespace NatoHrmsBackend.Controllers
 							ParseMonthYear(model.SiemensIdReceivedMonth) is DateTime sm && model.HasSiemensIdCard?.Trim() == "Yes" ? sm.ToString("MMM yyyy", CultureInfo.InvariantCulture) : "-",
 							OrDash(model.WhatsAppNumber),
 							certificates.Count == 0 ? "None" : $"{certificates.Count} file(s) uploaded - available in the HRMS portal",
+							"Yes - the employee confirmed the information is shared with their consent",
 							DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
 
 						await _emailService.SendEmail(
@@ -181,6 +190,14 @@ namespace NatoHrmsBackend.Controllers
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Failed to save employee details");
+
+				// Database storage full (SQL errors 1101 / 1105 / 9002): say so instead of a generic message
+				if (IsStorageFull(ex))
+				{
+					_logger.LogCritical("The database is out of space - employee details cannot be saved until space is added.");
+					return StatusCode(500, new { message = "We could not save your details because our storage is temporarily unavailable. Please contact the HR team." });
+				}
+
 				return StatusCode(500, new { message = "We could not save your details. Please try again later." });
 			}
 		}
@@ -290,6 +307,14 @@ namespace NatoHrmsBackend.Controllers
 			}
 
 			return e;
+		}
+
+		private static bool IsStorageFull(Exception ex)
+		{
+			for (var e = ex; e != null; e = e.InnerException)
+				if (e is SqlException sql && sql.Errors.Cast<SqlError>().Any(x => x.Number == 1101 || x.Number == 1105 || x.Number == 9002))
+					return true;
+			return false;
 		}
 
 		// DD/MM/YYYY -> date (null when blank / invalid)

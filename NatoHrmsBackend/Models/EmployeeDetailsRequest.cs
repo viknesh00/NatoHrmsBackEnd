@@ -23,6 +23,8 @@
 		public string? SiemensIdReceivedMonth { get; set; } // MM/YYYY (when the answer is Yes)
 		public string? WhatsAppNumber { get; set; }        // with country code
 
+		public bool ConsentGiven { get; set; }             // "information is shared with my consent" - mandatory on the public form
+
 		public List<IFormFile>? Certificates { get; set; }   // optional, max 10 (JPG / PNG / PDF)
 
 		public IFormFile PassportCopy { get; set; }    // photo + passport number page (JPG / PNG / PDF)

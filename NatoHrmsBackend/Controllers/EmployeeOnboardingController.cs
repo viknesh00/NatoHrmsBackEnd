@@ -302,7 +302,7 @@ namespace NatoHrmsBackend.Controllers
 				"First Name", "Last Name", "Date of Birth", "Place of Birth", "Mobile Number", "Passport No.",
 				"SAL Code", "City", "Country", "Current Address", "N-Cons Email ID", "N-Cons Email Status",
 				"Personal Email ID", "Visa / Work Permit Type", "Work Visa Expiry Date", "Siemens ID Card", "Siemens ID Received Month", "WhatsApp Number",
-				"Passport Copy", "Passport Photo", "Certificates", "Submitted At"
+				"Passport Copy", "Passport Photo", "Certificates", "Consent", "Submitted At"
 			};
 			for (int c = 0; c < headers.Length; c++)
 			{
@@ -340,7 +340,10 @@ namespace NatoHrmsBackend.Controllers
 				ws.Cell(r, 21).Value = string.Join("; ", certificates
 					.Where(cf => cf.SubmissionId == x.SubmissionId)
 					.Select(cf => UniqueCertificateName(Path.GetFileName(cf.FileName), excelNames)));
-				ws.Cell(r, 22).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
+				ws.Cell(r, 22).Value = x.ConsentGiven == true
+					? "Yes" + (x.ConsentAt.HasValue ? " (" + x.ConsentAt.Value.ToString("dd/MM/yyyy HH:mm") + ")" : "")
+					: "Not recorded";
+				ws.Cell(r, 23).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
 				r++;
 			}
 
