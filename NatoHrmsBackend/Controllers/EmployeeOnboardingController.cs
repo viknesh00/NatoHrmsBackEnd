@@ -98,9 +98,9 @@ namespace NatoHrmsBackend.Controllers
 			return File(cert.FileData, cert.ContentType, cert.FileName);
 		}
 
-		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files)
+		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files + certificates to add / remove)
 		[HttpPost("Update")]
-		[RequestSizeLimit(12 * 1024 * 1024)]
+		[RequestSizeLimit(20 * 1024 * 1024)]   // 2 passport files (5 MB each) + certificates (5 MB in total)
 		public async Task<IActionResult> Update([FromForm] EmployeeDetailsUpdateRequest model)
 		{
 			if (model == null || model.SubmissionId <= 0)
@@ -122,6 +122,38 @@ namespace NatoHrmsBackend.Controllers
 
 			var exists = await _context.EmployeeDetailSubmissions.AnyAsync(s => s.SubmissionId == model.SubmissionId && !s.IsDeleted);
 			if (!exists) return NotFound(new { message = "Submission not found." });
+
+			// Certificates: delete the ones marked for removal, add the new ones.
+			// Same rules as the public form: max 10 files and 5 MB in total (kept + new).
+			var existingCerts = await _context.EmployeeCertificateResults
+				.FromSqlRaw("EXEC GetEmployeeCertificates @SubmissionIds = @p0, @IncludeData = @p1", model.SubmissionId.ToString(), false)
+				.AsNoTracking()
+				.ToListAsync();
+
+			var removeIds = (model.RemoveCertificateIds ?? new List<int>())
+				.Distinct()
+				.Where(rid => existingCerts.Any(c => c.CertificateId == rid))   // only certificates of this submission
+				.ToList();
+			var keptCerts = existingCerts.Where(c => !removeIds.Contains(c.CertificateId)).ToList();
+
+			var newCertFiles = model.Certificates?.Where(f => f != null && f.Length > 0).ToList() ?? new List<IFormFile>();
+			var certErrors = new Dictionary<string, string>();
+			var newCerts = new List<EmployeeDetailsController.UploadedFile>();
+
+			if (keptCerts.Count + newCertFiles.Count > EmployeeDetailsController.MaxCertificates)
+				certErrors["certificates"] = $"A maximum of {EmployeeDetailsController.MaxCertificates} certificates is allowed.";
+			else if (keptCerts.Sum(c => c.FileSize) + newCertFiles.Sum(f => f.Length) > EmployeeDetailsController.MaxCertificatesTotalBytes)
+				certErrors["certificates"] = "The total size of all certificates must not exceed 5 MB.";
+			else
+			{
+				for (int i = 0; i < newCertFiles.Count; i++)
+				{
+					var cert = await EmployeeDetailsController.ReadFileAsync(newCertFiles[i], $"Certificate {i + 1}", new[] { ".jpg", ".jpeg", ".png", ".pdf" }, certErrors, "certificates");
+					if (cert != null) newCerts.Add(cert);
+				}
+			}
+			if (certErrors.Count > 0)
+				return BadRequest(new { message = certErrors.First().Value, errors = certErrors });
 
 			var passportNo = model.PassportNo.Trim().ToUpperInvariant();
 			bool duplicate = await _context.EmployeeDetailSubmissions
@@ -159,6 +191,9 @@ namespace NatoHrmsBackend.Controllers
 				new SqlParameter("@PassportPhotoData", SqlDbType.VarBinary) { Value = (object?)passportPhoto?.Content ?? DBNull.Value }
 			};
 
+			// Details, passport files and certificates are saved together - all or nothing
+			await using var tx = await _context.Database.BeginTransactionAsync();
+
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC UpdateEmployeeDetails
 				@SubmissionId, @FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
@@ -167,6 +202,26 @@ namespace NatoHrmsBackend.Controllers
 				@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData",
 				parameters
 			);
+
+			foreach (var certId in removeIds)
+			{
+				await _context.Database.ExecuteSqlRawAsync(
+					"EXEC DeleteEmployeeDetailCertificate @CertificateId, @SubmissionId",
+					new SqlParameter("@CertificateId", certId),
+					new SqlParameter("@SubmissionId", model.SubmissionId));
+			}
+
+			foreach (var cert in newCerts)
+			{
+				await _context.Database.ExecuteSqlRawAsync(
+					"EXEC InsertEmployeeDetailCertificate @SubmissionId, @FileName, @ContentType, @FileData",
+					new SqlParameter("@SubmissionId", model.SubmissionId),
+					new SqlParameter("@FileName", cert.FileName),
+					new SqlParameter("@ContentType", cert.ContentType),
+					new SqlParameter("@FileData", SqlDbType.VarBinary) { Value = cert.Content });
+			}
+
+			await tx.CommitAsync();
 
 			return Ok(new { message = "Employee details updated successfully." });
 		}

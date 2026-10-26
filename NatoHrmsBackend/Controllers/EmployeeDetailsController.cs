@@ -16,8 +16,8 @@ namespace NatoHrmsBackend.Controllers
 	public class EmployeeDetailsController : ControllerBase
 	{
 		private const long MaxFileBytes = 5 * 1024 * 1024; // 5 MB per file
-		private const int MaxCertificates = 10;
-		private const long MaxCertificatesTotalBytes = 5 * 1024 * 1024; // 5 MB for all certificates together
+		internal const int MaxCertificates = 10;
+		internal const long MaxCertificatesTotalBytes = 5 * 1024 * 1024; // 5 MB for all certificates together
 
 		private readonly ApplicationDbContext _context;
 		private readonly IEmailService _emailService;
