@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using NatoHrmsBackend.Data;
 using NatoHrmsBackend.Models;
+using NatoHrmsBackend.Services;
 using System.Data;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
@@ -14,6 +15,7 @@ namespace NatoHrmsBackend.Controllers
 	// HRMS screen for the submissions received from the public employee details form.
 	// Menu visibility (department / role) is managed in the frontend Sidebar, like the other screens.
 	[Authorize]
+	[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Read")]   // every action needs Read; modifying actions also need Edit
 	[ApiController]
 	[Route("api/[controller]")]
 	public class EmployeeOnboardingController : ControllerBase
@@ -100,6 +102,7 @@ namespace NatoHrmsBackend.Controllers
 
 		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files + certificates to add / remove)
 		[HttpPost("Update")]
+		[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Edit")]
 		[RequestSizeLimit(20 * 1024 * 1024)]   // 2 passport files (5 MB each) + certificates (5 MB in total)
 		public async Task<IActionResult> Update([FromForm] EmployeeDetailsUpdateRequest model)
 		{
@@ -109,6 +112,10 @@ namespace NatoHrmsBackend.Controllers
 			var errors = EmployeeDetailsController.Validate(model, out var dob);
 			if (errors.Count > 0)
 				return BadRequest(new { message = errors.First().Value, errors });
+
+			var employeeStatus = model.EmployeeStatus?.Trim();
+			if (!string.IsNullOrEmpty(employeeStatus) && employeeStatus != "Active" && employeeStatus != "Inactive")
+				return BadRequest(new { message = "Status must be Active or Inactive.", errors = new Dictionary<string, string> { ["employeeStatus"] = "Status must be Active or Inactive." } });
 
 			// Files are optional on edit - only validated/replaced when sent
 			var fileErrors = new Dictionary<string, string>();
@@ -182,6 +189,7 @@ namespace NatoHrmsBackend.Controllers
 				new SqlParameter("@HasSiemensIdCard", EmployeeDetailsController.DbOrNull(model.HasSiemensIdCard)),
 				new SqlParameter("@SiemensIdReceivedMonth", SqlDbType.Date) { Value = model.HasSiemensIdCard?.Trim() == "Yes" ? (object?)EmployeeDetailsController.ParseMonthYear(model.SiemensIdReceivedMonth) ?? DBNull.Value : DBNull.Value },
 				new SqlParameter("@WhatsAppNumber", EmployeeDetailsController.DbOrNull(model.WhatsAppNumber)),
+				new SqlParameter("@EmployeeStatus", EmployeeDetailsController.DbOrNull(employeeStatus)),
 				new SqlParameter("@UpdatedBy", HttpContext.User.Identity.Name),
 				new SqlParameter("@PassportCopyFileName", (object?)passportCopy?.FileName ?? DBNull.Value),
 				new SqlParameter("@PassportCopyContentType", (object?)passportCopy?.ContentType ?? DBNull.Value),
@@ -197,7 +205,7 @@ namespace NatoHrmsBackend.Controllers
 			await _context.Database.ExecuteSqlRawAsync(
 				@"EXEC UpdateEmployeeDetails
 				@SubmissionId, @FirstName, @LastName, @DateOfBirth, @PlaceOfBirth, @MobileNumber, @PassportNo, @SALCode,
-				@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @SiemensIdReceivedMonth, @WhatsAppNumber, @UpdatedBy,
+				@City, @Country, @CurrentAddress, @NConsEmail, @NConsEmailStatus, @PersonalEmail, @VisaType, @WorkVisaExpiryDate, @HasSiemensIdCard, @SiemensIdReceivedMonth, @WhatsAppNumber, @EmployeeStatus, @UpdatedBy,
 				@PassportCopyFileName, @PassportCopyContentType, @PassportCopyData,
 				@PassportPhotoFileName, @PassportPhotoContentType, @PassportPhotoData",
 				parameters
@@ -229,6 +237,7 @@ namespace NatoHrmsBackend.Controllers
 		// POST: api/EmployeeOnboarding/Delete   body: [1,2,3]
 		// Soft delete: the submissions are flagged as deleted (data and files are kept in the database)
 		[HttpPost("Delete")]
+		[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Edit")]
 		public async Task<IActionResult> Delete([FromBody] int[] ids)
 		{
 			if (ids == null || ids.Length == 0)
@@ -241,6 +250,42 @@ namespace NatoHrmsBackend.Controllers
 			);
 
 			return Ok(new { message = "Deleted successfully." });
+		}
+
+		// GET: api/EmployeeOnboarding/ColumnSettings   -> { hiddenColumns: ["city", ...] }  (same for every user)
+		[HttpGet("ColumnSettings")]
+		public async Task<IActionResult> GetColumnSettings()
+		{
+			var hidden = await _context.HiddenColumnRows
+				.FromSqlRaw("EXEC GetOnboardingHiddenColumns")
+				.AsNoTracking()
+				.ToListAsync();
+
+			return Ok(new { hiddenColumns = hidden.Select(h => h.ColumnKey) });
+		}
+
+		// POST: api/EmployeeOnboarding/ColumnSettings   { hiddenColumns: [...] }   Admin / Manager only
+		// Only changes which columns are shown - the employee data itself is never touched.
+		[HttpPost("ColumnSettings")]
+		public async Task<IActionResult> SaveColumnSettings([FromBody] ColumnSettingsRequest request)
+		{
+			var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+			if (!HrmsPermissionAttribute.IsAdminOrManager(role))
+				return StatusCode(403, new { message = "Only Admin or Manager can change column visibility." });
+
+			var keys = (request?.HiddenColumns ?? new List<string>())
+				.Select(k => (k ?? "").Trim())
+				.Where(k => k.Length > 0 && Regex.IsMatch(k, @"^[A-Za-z0-9_]{1,50}$"))
+				.Where(k => !AlwaysVisibleColumns.Contains(k))      // Name and Actions can never be hidden
+				.Distinct()
+				.ToList();
+
+			await _context.Database.ExecuteSqlRawAsync(
+				"EXEC SaveOnboardingHiddenColumns @p0, @p1",
+				string.Join(",", keys),
+				(object?)User.Identity?.Name ?? DBNull.Value);
+
+			return Ok(new { message = "Column settings saved." });
 		}
 
 		// POST: api/EmployeeOnboarding/Download   { all: true }  or  { ids: [1,2] }
@@ -281,6 +326,12 @@ namespace NatoHrmsBackend.Controllers
 					.AsNoTracking()
 					.ToListAsync();
 
+			// the Excel follows the visible columns of the list (hidden ones are left out)
+			var hiddenKeys = (await _context.HiddenColumnRows
+				.FromSqlRaw("EXEC GetOnboardingHiddenColumns")
+				.AsNoTracking()
+				.ToListAsync()).Select(h => h.ColumnKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
 			using var zipStream = new MemoryStream();
 			using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
 			{
@@ -288,7 +339,7 @@ namespace NatoHrmsBackend.Controllers
 				var entry = archive.CreateEntry("Employee_Details.xlsx", CompressionLevel.Fastest);
 				using (var es = entry.Open())
 				{
-					var bytes = BuildWorkbook(rows, certificates);
+					var bytes = BuildWorkbook(rows, certificates, hiddenKeys);
 					await es.WriteAsync(bytes, 0, bytes.Length);
 				}
 
@@ -331,6 +382,8 @@ namespace NatoHrmsBackend.Controllers
 		}
 
 		// ---------------------------------------------------------------------
+		private static readonly string[] AlwaysVisibleColumns = { "fullName", "actions", "select" };
+
 		private static string SafeName(string value) =>
 			Regex.Replace(value ?? "", @"[^\w\-]+", "_").Trim('_');
 
@@ -347,22 +400,59 @@ namespace NatoHrmsBackend.Controllers
 			}
 		}
 
-		private static byte[] BuildWorkbook(List<EmployeeDetailList> rows, List<EmployeeCertificate> certificates)
+		private static byte[] BuildWorkbook(List<EmployeeDetailList> rows, List<EmployeeCertificate> certificates, HashSet<string> hiddenKeys)
 		{
 			using var wb = new XLWorkbook();
 			var ws = wb.Worksheets.Add("Employee Details");
 
-			var headers = new[]
+			// certificate file names per employee, in the same (de-duplicated) form as inside the ZIP
+			var certNames = rows.ToDictionary(x => x.SubmissionId, x =>
 			{
-				"First Name", "Last Name", "Date of Birth", "Place of Birth", "Mobile Number", "Passport No.",
-				"SAL Code", "City", "Country", "Current Address", "N-Cons Email ID", "N-Cons Email Status",
-				"Personal Email ID", "Visa / Work Permit Type", "Work Visa Expiry Date", "Siemens ID Card", "Siemens ID Received Month", "WhatsApp Number",
-				"Passport Copy", "Passport Photo", "Certificates", "Consent", "Submitted At"
-			};
-			for (int c = 0; c < headers.Length; c++)
+				var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				return string.Join("; ", certificates
+					.Where(cf => cf.SubmissionId == x.SubmissionId)
+					.Select(cf => UniqueCertificateName(Path.GetFileName(cf.FileName), used)));
+			});
+
+			// key = the column key used by the Onboarding list. A column hidden there is left out here too.
+			var columns = new List<(string Key, string Header, Func<EmployeeDetailList, string> Value)>
+			{
+				("fullName", "First Name", x => x.FirstName),
+				("fullName", "Last Name", x => x.LastName),
+				("dobText", "Date of Birth", x => x.DateOfBirth.ToString("dd/MM/yyyy")),
+				("placeOfBirth", "Place of Birth", x => x.PlaceOfBirth),
+				("mobileNumber", "Mobile Number", x => x.MobileNumber),
+				("passportNo", "Passport No.", x => x.PassportNo),
+				("salCode", "SAL Code", x => x.SALCode ?? ""),
+				("city", "City", x => x.City),
+				("country", "Country", x => x.Country),
+				("currentAddress", "Current Address", x => x.CurrentAddress),
+				("nConsEmail", "N-Cons Email ID", x => x.NConsEmail ?? ""),
+				("nConsEmailStatus", "N-Cons Email Status", x => x.NConsEmailStatus ?? ""),
+				("personalEmail", "Personal Email ID", x => x.PersonalEmail),
+				("employeeStatus", "Status", x => x.EmployeeStatus ?? ""),
+				("workStatus", "Work Status", x => x.WorkStatus ?? ""),
+				("workPmName", "PM Name", x => x.WorkPmName ?? ""),
+				("visaType", "Visa / Work Permit Type", x => x.VisaType ?? ""),
+				("visaExpiryText", "Work Visa Expiry Date", x => x.WorkVisaExpiryDate?.ToString("dd/MM/yyyy") ?? ""),
+				("hasSiemensIdCard", "Siemens ID Card", x => x.HasSiemensIdCard ?? ""),
+				("siemensMonthText", "Siemens ID Received Month", x => x.SiemensIdReceivedMonth?.ToString("MMM yyyy") ?? ""),
+				("whatsAppNumber", "WhatsApp Number", x => x.WhatsAppNumber ?? ""),
+				("documents", "Passport Copy", x => x.PassportCopyFileName ?? ""),
+				("documents", "Passport Photo", x => x.PassportPhotoFileName ?? ""),
+				("certificateCount", "Certificates", x => certNames[x.SubmissionId]),
+				("consentText", "Consent", x => x.ConsentGiven == true
+					? "Yes" + (x.ConsentAt.HasValue ? " (" + x.ConsentAt.Value.ToString("dd/MM/yyyy HH:mm") + ")" : "")
+					: "Not recorded"),
+				("submittedText", "Submitted At", x => x.SubmittedAt.ToString("dd/MM/yyyy HH:mm"))
+			}
+			.Where(c => !hiddenKeys.Contains(c.Key))
+			.ToList();
+
+			for (int c = 0; c < columns.Count; c++)
 			{
 				var cell = ws.Cell(1, c + 1);
-				cell.Value = headers[c];
+				cell.Value = columns[c].Header;
 				cell.Style.Font.Bold = true;
 				cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#EDE9FE");
 			}
@@ -370,35 +460,8 @@ namespace NatoHrmsBackend.Controllers
 			int r = 2;
 			foreach (var x in rows)
 			{
-				ws.Cell(r, 1).Value = x.FirstName;
-				ws.Cell(r, 2).Value = x.LastName;
-				ws.Cell(r, 3).Value = x.DateOfBirth.ToString("dd/MM/yyyy");
-				ws.Cell(r, 4).Value = x.PlaceOfBirth;
-				ws.Cell(r, 5).SetValue(x.MobileNumber);       // keep as text (leading +)
-				ws.Cell(r, 6).SetValue(x.PassportNo);
-				ws.Cell(r, 7).SetValue(x.SALCode ?? "");
-				ws.Cell(r, 8).Value = x.City;
-				ws.Cell(r, 9).Value = x.Country;
-				ws.Cell(r, 10).Value = x.CurrentAddress;
-				ws.Cell(r, 11).Value = x.NConsEmail ?? "";
-				ws.Cell(r, 12).Value = x.NConsEmailStatus ?? "";
-				ws.Cell(r, 13).Value = x.PersonalEmail;
-				ws.Cell(r, 14).Value = x.VisaType ?? "";
-				ws.Cell(r, 15).Value = x.WorkVisaExpiryDate?.ToString("dd/MM/yyyy") ?? "";
-				ws.Cell(r, 16).Value = x.HasSiemensIdCard ?? "";
-				ws.Cell(r, 17).Value = x.SiemensIdReceivedMonth?.ToString("MMM yyyy") ?? "";
-				ws.Cell(r, 18).SetValue(x.WhatsAppNumber ?? "");
-				ws.Cell(r, 19).Value = x.PassportCopyFileName ?? "";
-				ws.Cell(r, 20).Value = x.PassportPhotoFileName ?? "";
-				// certificate file names, in the same (de-duplicated) form as inside the ZIP
-				var excelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-				ws.Cell(r, 21).Value = string.Join("; ", certificates
-					.Where(cf => cf.SubmissionId == x.SubmissionId)
-					.Select(cf => UniqueCertificateName(Path.GetFileName(cf.FileName), excelNames)));
-				ws.Cell(r, 22).Value = x.ConsentGiven == true
-					? "Yes" + (x.ConsentAt.HasValue ? " (" + x.ConsentAt.Value.ToString("dd/MM/yyyy HH:mm") + ")" : "")
-					: "Not recorded";
-				ws.Cell(r, 23).Value = x.SubmittedAt.ToString("dd/MM/yyyy HH:mm");
+				for (int c = 0; c < columns.Count; c++)
+					ws.Cell(r, c + 1).SetValue(columns[c].Value(x) ?? "");   // text only, e.g. keeps the leading + of phone numbers
 				r++;
 			}
 

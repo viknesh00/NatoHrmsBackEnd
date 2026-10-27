@@ -17,6 +17,9 @@
 		public string? NConsEmailStatus { get; set; }
 		public string PersonalEmail { get; set; }
 		public int CertificateCount { get; set; }
+		public string? EmployeeStatus { get; set; }   // Active / Inactive
+		public string? WorkStatus { get; set; }       // latest work status record (Active / Deactive)
+		public string? WorkPmName { get; set; }
 		public bool? ConsentGiven { get; set; }
 		public DateTime? ConsentAt { get; set; }
 		public string? VisaType { get; set; }

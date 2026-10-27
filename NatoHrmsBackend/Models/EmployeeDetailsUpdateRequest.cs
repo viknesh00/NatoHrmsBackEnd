@@ -4,6 +4,7 @@
 	public class EmployeeDetailsUpdateRequest : EmployeeDetailsRequest
 	{
 		public int SubmissionId { get; set; }
+		public string? EmployeeStatus { get; set; }   // Active / Inactive (HR only)
 		public new IFormFile? PassportCopy { get; set; }
 		public new IFormFile? PassportPhoto { get; set; }
 
