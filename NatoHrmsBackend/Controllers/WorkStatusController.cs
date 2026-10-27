@@ -27,7 +27,6 @@ namespace NatoHrmsBackend.Controllers
 
 		// GET: api/WorkStatus/GetAll?submissionId=5
 		[HttpGet("GetAll")]
-		[HrmsPermission(HrmsPermissionAttribute.WorkStatus, "Read")]
 		public async Task<IActionResult> GetAll([FromQuery] int? submissionId)
 		{
 			var rows = submissionId.HasValue
@@ -47,12 +46,9 @@ namespace NatoHrmsBackend.Controllers
 		// A record belongs to the period when it overlaps it: started on / before "to" and not ended before "from".
 		// One date only = that single day.
 		[HttpGet("Report")]
+		[Authorize(Roles = "Admin,Manager")]
 		public async Task<IActionResult> Report([FromQuery] DateTime? from, [FromQuery] DateTime? to)
 		{
-			var role = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
-			if (!HrmsPermissionAttribute.IsAdminOrManager(role))
-				return StatusCode(403, new { message = "The Work Status report is available to Admin and Manager only." });
-
 			if (from.HasValue && to.HasValue && to.Value.Date < from.Value.Date)
 				return BadRequest(new { message = "The end of the period cannot be before its start." });
 
@@ -72,7 +68,6 @@ namespace NatoHrmsBackend.Controllers
 
 		// GET: api/WorkStatus/PmList   - people who can be selected as PM (Admin / Manager / Team Lead users)
 		[HttpGet("PmList")]
-		[HrmsPermission(HrmsPermissionAttribute.WorkStatus, "Read")]
 		public async Task<IActionResult> PmList()
 		{
 			var users = await _context.UserLists
@@ -96,10 +91,12 @@ namespace NatoHrmsBackend.Controllers
 		{
 			if (model == null) return BadRequest(new { message = "Invalid request." });
 
+			// Employee: view only. Team Lead: can add. Admin / Manager: can add and modify.
 			var role = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
 			bool isEdit = model.WorkStatusId.HasValue && model.WorkStatusId.Value > 0;
-			if (!await HasRightAsync(role, isEdit ? "Edit" : "Write"))
-				return StatusCode(403, new { message = $"You do not have {(isEdit ? "Edit" : "Write")} permission for Work Status." });
+			bool isAdminOrManager = role == "Admin" || role == "Manager";
+			if (isEdit ? !isAdminOrManager : !(isAdminOrManager || role == "TeamLead"))
+				return StatusCode(403, new { message = isEdit ? "Only Admin or Manager can modify work status records." : "You are not allowed to add work status records." });
 
 			// ---------- validation ----------
 			var errors = new Dictionary<string, string>();
@@ -152,7 +149,7 @@ namespace NatoHrmsBackend.Controllers
 
 		// POST: api/WorkStatus/Delete   body: [1,2]   (soft delete - needs Edit permission)
 		[HttpPost("Delete")]
-		[HrmsPermission(HrmsPermissionAttribute.WorkStatus, "Edit")]
+		[Authorize(Roles = "Admin,Manager")]
 		public async Task<IActionResult> Delete([FromBody] int[] ids)
 		{
 			if (ids == null || ids.Length == 0)
@@ -164,14 +161,6 @@ namespace NatoHrmsBackend.Controllers
 				(object?)User.Identity?.Name ?? DBNull.Value);
 
 			return Ok(new { message = "Deleted successfully." });
-		}
-
-		private async Task<bool> HasRightAsync(string? role, string action)
-		{
-			if (HrmsPermissionAttribute.IsAdminOrManager(role)) return true;
-			var rights = await HrmsPermissionAttribute.GetRightsAsync(_context, role);
-			if (!rights.TryGetValue(HrmsPermissionAttribute.WorkStatus, out var r)) return false;
-			return action == "Write" ? r.CanWrite : r.CanEdit;
 		}
 	}
 }

@@ -15,7 +15,6 @@ namespace NatoHrmsBackend.Controllers
 	// HRMS screen for the submissions received from the public employee details form.
 	// Menu visibility (department / role) is managed in the frontend Sidebar, like the other screens.
 	[Authorize]
-	[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Read")]   // every action needs Read; modifying actions also need Edit
 	[ApiController]
 	[Route("api/[controller]")]
 	public class EmployeeOnboardingController : ControllerBase
@@ -102,7 +101,7 @@ namespace NatoHrmsBackend.Controllers
 
 		// POST: api/EmployeeOnboarding/Update  (details + optional replacement files + certificates to add / remove)
 		[HttpPost("Update")]
-		[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Edit")]
+		[Authorize(Roles = "Admin,Manager")]   // only Admin / Manager can modify
 		[RequestSizeLimit(20 * 1024 * 1024)]   // 2 passport files (5 MB each) + certificates (5 MB in total)
 		public async Task<IActionResult> Update([FromForm] EmployeeDetailsUpdateRequest model)
 		{
@@ -237,7 +236,7 @@ namespace NatoHrmsBackend.Controllers
 		// POST: api/EmployeeOnboarding/Delete   body: [1,2,3]
 		// Soft delete: the submissions are flagged as deleted (data and files are kept in the database)
 		[HttpPost("Delete")]
-		[HrmsPermission(HrmsPermissionAttribute.Onboarding, "Edit")]
+		[Authorize(Roles = "Admin,Manager")]
 		public async Task<IActionResult> Delete([FromBody] int[] ids)
 		{
 			if (ids == null || ids.Length == 0)
@@ -267,12 +266,9 @@ namespace NatoHrmsBackend.Controllers
 		// POST: api/EmployeeOnboarding/ColumnSettings   { hiddenColumns: [...] }   Admin / Manager only
 		// Only changes which columns are shown - the employee data itself is never touched.
 		[HttpPost("ColumnSettings")]
+		[Authorize(Roles = "Admin,Manager")]
 		public async Task<IActionResult> SaveColumnSettings([FromBody] ColumnSettingsRequest request)
 		{
-			var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-			if (!HrmsPermissionAttribute.IsAdminOrManager(role))
-				return StatusCode(403, new { message = "Only Admin or Manager can change column visibility." });
-
 			var keys = (request?.HiddenColumns ?? new List<string>())
 				.Select(k => (k ?? "").Trim())
 				.Where(k => k.Length > 0 && Regex.IsMatch(k, @"^[A-Za-z0-9_]{1,50}$"))
