@@ -42,11 +42,11 @@ namespace NatoHrmsBackend.Controllers
 			return Ok(rows);
 		}
 
-		// GET: api/WorkStatus/Report?from=2026-01-01&to=2026-03-31   (Admin / Manager only)
+		// GET: api/WorkStatus/Report?from=2026-01-01&to=2026-03-31   (Admin / Manager / Team Lead)
 		// A record belongs to the period when it overlaps it: started on / before "to" and not ended before "from".
 		// One date only = that single day.
 		[HttpGet("Report")]
-		[Authorize(Roles = "Admin,Manager")]
+		[Authorize(Roles = "Admin,Manager,TeamLead")]   // everybody except Employee
 		public async Task<IActionResult> Report([FromQuery] DateTime? from, [FromQuery] DateTime? to)
 		{
 			if (from.HasValue && to.HasValue && to.Value.Date < from.Value.Date)
