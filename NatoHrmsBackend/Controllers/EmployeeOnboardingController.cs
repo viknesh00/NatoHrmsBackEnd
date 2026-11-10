@@ -429,6 +429,8 @@ namespace NatoHrmsBackend.Controllers
 				("employeeStatus", "Status", x => x.EmployeeStatus ?? ""),
 				("workStatus", "Work Status", x => x.WorkStatus ?? ""),
 				("workPmName", "PM Name", x => x.WorkPmName ?? ""),
+				("workStartText", "Work Start Date", x => x.WorkStartDate?.ToString("dd/MM/yyyy") ?? ""),
+				("workEndText", "Work End Date", x => x.WorkEndDate?.ToString("dd/MM/yyyy") ?? ""),
 				("visaType", "Visa / Work Permit Type", x => x.VisaType ?? ""),
 				("visaExpiryText", "Work Visa Expiry Date", x => x.WorkVisaExpiryDate?.ToString("dd/MM/yyyy") ?? ""),
 				("hasSiemensIdCard", "Siemens ID Card", x => x.HasSiemensIdCard ?? ""),

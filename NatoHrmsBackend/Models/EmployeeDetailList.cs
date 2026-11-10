@@ -20,6 +20,8 @@
 		public string? EmployeeStatus { get; set; }   // Active / Inactive
 		public string? WorkStatus { get; set; }       // latest work status record (Active / Deactive)
 		public string? WorkPmName { get; set; }
+		public DateTime? WorkStartDate { get; set; }
+		public DateTime? WorkEndDate { get; set; }
 		public bool? ConsentGiven { get; set; }
 		public DateTime? ConsentAt { get; set; }
 		public string? VisaType { get; set; }
